@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digit Drawing & Upload App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .drawing-section, .upload-section {
+            flex: 1;
+            min-width: 300px;
+        }
+        .form-container {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .canvas-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        #drawingCanvas {
+            border: 2px solid #000;
+            border-radius: 5px;
+            cursor: crosshair;
+            background-color: white;
+        }
+        .btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn.clear {
+            background-color: #f44336;
+        }
+        .btn.clear:hover {
+            background-color: #da190b;
+        }
+        .preview-container {
+            margin-top: 20px;
+            text-align: center;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #imagePreview {
+            max-width: 100%;
+            max-height: 400px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            display: none;
+        }
+        .uploaded-image {
+            max-width: 100%;
+            max-height: 400px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #file-name {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        .result-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .result-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .image-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 300px;
+        }
+        .image-card img {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+        .image-card h4 {
+            margin: 10px 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Digit Drawing & Upload App</h1>
+    
+    <div class="container">
+        <div class="drawing-section">
+            <h2>Draw a Digit</h2>
+            <div class="canvas-container">
+                <canvas id="drawingCanvas" width="280" height="280"></canvas>
+                <div class="controls">
+                    <button class="btn clear" onclick="clearCanvas()">Clear Canvas</button>
+                    <button class="btn" onclick="submitDrawing()">Submit Drawing</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h2>Upload an Image</h2>
+            <div class="form-container">
+                <form method="POST" enctype="multipart/form-data" onsubmit="return validateForm()">
+                    <label for="image">Select an image or drag and drop here:</label><br>
+                    <input type="file" id="image" name="image" accept="image/*" onchange="previewImage(this)"><br>
+                    <p id="file-name"></p>
+                    <button type="submit" class="btn">Upload Image</button>
+                </form>
+                <div class="preview-container">
+                    <img id="imagePreview" alt="Preview">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="result-section">
+        <h2>Results</h2>
+        <div class="result-container" id="resultContainer">
+            {% if uploaded_image %}
+            <div class="image-card">
+                <h4>Uploaded Image</h4>
+                <img src="{{ url_for('static', filename=uploaded_image) }}" alt="Uploaded Image">
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        const STATIC_URL = "{{ url_for('static', filename='') }}";
+        
+        // Canvas drawing functionality
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Set up canvas
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 15;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Initialize canvas with white background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Drawing event listeners
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch support
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', stopDrawing);
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX - rect.left,
+                clientY: touch.clientY - rect.top
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX - rect.left,
+                clientY: touch.clientY - rect.top
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function submitDrawing() {
+            const imageData = canvas.toDataURL('image/png');
+            
+            // Create a form and submit the image data
+            const form = new FormData();
+            form.append('image_data', imageData);
+            
+            fetch('/', {
+                method: 'POST',
+                body: form
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Create new image card
+                    const imageCard = document.createElement('div');
+                    imageCard.className = 'image-card';
+                    imageCard.innerHTML = `
+                        <h4>Drawn Digit</h4>
+                        <img src="${STATIC_URL}${data.image_path}" alt="Drawn Digit">
+                    `;
+                    
+                    // Add to result container
+                    const resultContainer = document.getElementById('resultContainer');
+                    resultContainer.insertBefore(imageCard, resultContainer.firstChild);
+                    
+                    // Clear canvas for next drawing
+                    clearCanvas();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error submitting drawing. Details: ' + error.message);
+            });
+        }
+
+        // File upload preview functionality
+        function previewImage(input) {
+            const preview = document.getElementById('imagePreview');
+            const fileName = document.getElementById('file-name');
+            
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    fileName.textContent = input.files[0].name;
+                }
+                
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function validateForm() {
+            const fileInput = document.getElementById('image');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select an image file');
+                return false;
+            }
+            return true;
+        }
+    </script>
+</body>
+</html> 
