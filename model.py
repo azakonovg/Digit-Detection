@@ -329,6 +329,34 @@ class DigitClassifier:
             transforms.Normalize((0.1307,), (0.3081,))
         ])
 
+    def evaluate_model(self):
+        """Evaluate the model on the test dataset and return accuracy."""
+        try:
+            # Load test dataset
+            test_dataset = MNIST_Custom(root='./data', train=False, transform=self.transform)
+            test_loader = DataLoader(test_dataset, batch_size=1000, shuffle=False)
+            
+            self.model.eval()
+            correct = 0
+            total = 0
+            
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data = data.to(self.device)
+                    target = target.to(self.device)
+                    
+                    output = self.model(data)
+                    pred = output.argmax(dim=1, keepdim=True)
+                    correct += pred.eq(target.view_as(pred)).sum().item()
+                    total += target.size(0)
+            
+            accuracy = 100. * correct / total
+            return {'success': True, 'accuracy': accuracy}
+            
+        except Exception as e:
+            print(f"Error evaluating model: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
     def train_model(self, epochs=5, batch_size=64):
         try:
             # Load MNIST dataset using custom implementation
@@ -423,10 +451,17 @@ class DigitClassifier:
                 except Exception as e:
                     print(f"Error saving model after epoch: {str(e)}")
             
-            # Final save attempt
+            # Final save attempt and evaluation
             try:
                 torch.save(self.model.state_dict(), self.model_path)
                 print("Training completed successfully")
+                
+                # Evaluate model after training
+                evaluation = self.evaluate_model()
+                if evaluation['success']:
+                    print(f"Final model accuracy on test set: {evaluation['accuracy']:.2f}%")
+                    return {'status': 'success', 'message': f"Training completed successfully. Test accuracy: {evaluation['accuracy']:.2f}%"}
+                
                 return {'status': 'success', 'message': 'Training completed successfully'}
             except Exception as e:
                 print(f"Error saving final model: {str(e)}")
@@ -447,6 +482,29 @@ class DigitClassifier:
         except Exception as e:
             print(f"Prediction error: {str(e)}")
             raise
+
+    def reset_weights(self):
+        """Reset the model weights to random values"""
+        def weight_reset(m):
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                m.reset_parameters()
+        
+        try:
+            self.model.apply(weight_reset)
+            # Delete the saved model file if it exists
+            if os.path.exists(self.model_path):
+                os.remove(self.model_path)
+            print("Model weights reset to random values")
+            
+            # Evaluate model after reset
+            evaluation = self.evaluate_model()
+            if evaluation['success']:
+                print(f"Model accuracy after reset: {evaluation['accuracy']:.2f}%")
+            
+            return True
+        except Exception as e:
+            print(f"Error resetting weights: {str(e)}")
+            return False
 
 # Initialize the classifier
 print("Initializing DigitClassifier...")

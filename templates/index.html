@@ -136,6 +136,47 @@
             color: #666;
             margin-top: 5px;
         }
+        .mnist-samples-section {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .mnist-controls {
+            margin: 10px 0;
+        }
+        .mnist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .mnist-sample {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            padding: 5px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .mnist-sample img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            margin-bottom: 5px;
+        }
+        .mnist-sample .label {
+            font-size: 12px;
+            color: #666;
+        }
+        .btn.reset {
+            background-color: #ff9800;
+        }
+        .btn.reset:hover {
+            background-color: #f57c00;
+        }
     </style>
 </head>
 <body>
@@ -147,13 +188,25 @@
             <label for="epochs">Epochs:</label>
             <input type="number" id="epochs" value="5" min="1" max="100">
             <button id="trainButton" class="btn" onclick="startTraining()">Train Model</button>
+            <button id="resetButton" class="btn reset" onclick="resetModel()">Reset Model</button>
+            <button id="accuracyButton" class="btn" onclick="getModelAccuracy()">Get Accuracy</button>
         </div>
         <div class="progress-container">
             <div class="progress-bar">
                 <div id="trainingProgress" class="progress-bar-fill"></div>
             </div>
             <div id="trainingStatus">Not started</div>
+            <div id="modelAccuracy"></div>
         </div>
+    </div>
+
+    <!-- MNIST Samples Section -->
+    <div class="section-card mnist-samples-section">
+        <h2>MNIST Training Samples</h2>
+        <div class="mnist-controls">
+            <button class="btn" onclick="loadMNISTSamples()">Load New Samples</button>
+        </div>
+        <div class="mnist-grid" id="mnistSamples"></div>
     </div>
 
     <!-- Main content in two columns -->
@@ -292,12 +345,14 @@
             const epochs = document.getElementById('epochs').value || 5;
             const progressBar = document.getElementById('trainingProgress');
             const statusText = document.getElementById('trainingStatus');
+            const accuracyDisplay = document.getElementById('modelAccuracy');
             const trainButton = document.getElementById('trainButton');
             
             // Disable the train button during training
             trainButton.disabled = true;
             progressBar.style.width = '0%';
             statusText.textContent = 'Starting training...';
+            accuracyDisplay.textContent = '';
             
             const eventSource = new EventSource(`/train?epochs=${epochs}`);
             
@@ -319,6 +374,9 @@
                     progressBar.classList.add('bg-success');
                     eventSource.close();
                     trainButton.disabled = false;
+                    
+                    // Get accuracy after training
+                    getModelAccuracy();
                     return;
                 }
                 
@@ -339,6 +397,95 @@
                 trainButton.disabled = false;
             };
         }
+
+        function loadMNISTSamples() {
+            fetch('/get_mnist_samples?num_samples=10')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const container = document.getElementById('mnistSamples');
+                        container.innerHTML = '';
+                        
+                        data.samples.forEach(sample => {
+                            const div = document.createElement('div');
+                            div.className = 'mnist-sample';
+                            div.innerHTML = `
+                                <img src="data:image/png;base64,${sample.image}" alt="MNIST ${sample.label}">
+                                <span class="label">Label: ${sample.label}</span>
+                            `;
+                            container.appendChild(div);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading MNIST samples:', error);
+                });
+        }
+
+        function resetModel() {
+            const resetButton = document.getElementById('resetButton');
+            const trainButton = document.getElementById('trainButton');
+            const statusText = document.getElementById('trainingStatus');
+            const accuracyDisplay = document.getElementById('modelAccuracy');
+            
+            // Disable buttons during reset
+            resetButton.disabled = true;
+            trainButton.disabled = true;
+            statusText.textContent = 'Resetting model weights...';
+            
+            fetch('/reset_model', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusText.textContent = 'Model reset successfully. Ready for training.';
+                    if (data.accuracy !== undefined) {
+                        accuracyDisplay.textContent = `Model Accuracy after reset: ${data.accuracy.toFixed(2)}%`;
+                    }
+                    // Clear any existing results since they're no longer valid
+                    document.getElementById('resultContainer').innerHTML = '';
+                } else {
+                    statusText.textContent = `Error: ${data.error}`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusText.textContent = 'Error resetting model';
+            })
+            .finally(() => {
+                // Re-enable buttons
+                resetButton.disabled = false;
+                trainButton.disabled = false;
+            });
+        }
+
+        function getModelAccuracy() {
+            const accuracyButton = document.getElementById('accuracyButton');
+            const accuracyDisplay = document.getElementById('modelAccuracy');
+            
+            accuracyButton.disabled = true;
+            accuracyDisplay.textContent = 'Calculating accuracy...';
+            
+            fetch('/get_accuracy')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        accuracyDisplay.textContent = `Model Accuracy: ${data.accuracy.toFixed(2)}%`;
+                    } else {
+                        accuracyDisplay.textContent = `Error getting accuracy: ${data.error}`;
+                    }
+                })
+                .catch(error => {
+                    accuracyDisplay.textContent = `Error: ${error.message}`;
+                })
+                .finally(() => {
+                    accuracyButton.disabled = false;
+                });
+        }
+
+        // Load samples when page loads
+        document.addEventListener('DOMContentLoaded', loadMNISTSamples);
     </script>
 </body>
 </html> 

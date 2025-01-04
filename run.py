@@ -10,6 +10,8 @@ import io
 import numpy as np
 from torchvision import transforms
 import json
+from torchvision import datasets
+import matplotlib.pyplot as plt
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -69,6 +71,38 @@ def process_image_for_prediction(image_path):
     
     image_tensor = transform(new_image).unsqueeze(0)  # Add batch dimension
     return image_tensor
+
+def get_sample_mnist_images(num_samples=10):
+    try:
+        # Load MNIST dataset
+        transform = transforms.Compose([transforms.ToTensor()])
+        train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+        
+        # Get random indices
+        indices = torch.randperm(len(train_dataset))[:num_samples]
+        
+        sample_images = []
+        for idx in indices:
+            image, label = train_dataset[idx]
+            # Convert tensor to PIL Image
+            image = transforms.ToPILImage()(image)
+            
+            # Save image to memory
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+            
+            # Convert to base64
+            img_base64 = base64.b64encode(img_byte_arr).decode('utf-8')
+            sample_images.append({
+                'image': img_base64,
+                'label': int(label)
+            })
+        
+        return sample_images
+    except Exception as e:
+        print(f"Error getting MNIST samples: {str(e)}")
+        return []
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -137,6 +171,52 @@ def train():
     except Exception as e:
         print(f"Error during training setup: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/get_mnist_samples')
+def get_mnist_samples():
+    try:
+        num_samples = int(request.args.get('num_samples', 10))
+        samples = get_sample_mnist_images(num_samples)
+        return jsonify({'success': True, 'samples': samples})
+    except Exception as e:
+        print(f"Error in get_mnist_samples route: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/get_accuracy')
+def get_accuracy():
+    try:
+        evaluation = classifier.evaluate_model()
+        if evaluation['success']:
+            return jsonify({'success': True, 'accuracy': evaluation['accuracy']})
+        else:
+            return jsonify({'success': False, 'error': evaluation.get('error', 'Unknown error')}), 500
+    except Exception as e:
+        print(f"Error getting accuracy: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/reset_model', methods=['POST'])
+def reset_model():
+    try:
+        success = classifier.reset_weights()
+        if success:
+            # Get accuracy after reset
+            evaluation = classifier.evaluate_model()
+            if evaluation['success']:
+                return jsonify({
+                    'success': True, 
+                    'message': 'Model weights reset successfully',
+                    'accuracy': evaluation['accuracy']
+                })
+            else:
+                return jsonify({
+                    'success': True, 
+                    'message': 'Model weights reset successfully but could not evaluate accuracy'
+                })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to reset model weights'}), 500
+    except Exception as e:
+        print(f"Error resetting model: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
