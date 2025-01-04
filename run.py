@@ -218,5 +218,17 @@ def reset_model():
         print(f"Error resetting model: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/get_dataset_info')
+def get_dataset_info():
+    try:
+        info = classifier.get_dataset_info()
+        if info['success']:
+            return jsonify({'success': True, 'info': info['info']})
+        else:
+            return jsonify({'success': False, 'error': info.get('error', 'Unknown error')}), 500
+    except Exception as e:
+        print(f"Error getting dataset info: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

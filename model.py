@@ -28,7 +28,7 @@ class MNIST_Custom(datasets.VisionDataset):
         ('https://ossci-datasets.s3.amazonaws.com/mnist/train-images-idx3-ubyte.gz',
          'f68b3c2dcbeaaa9fbdd348bbdeb94873'),
         ('https://ossci-datasets.s3.amazonaws.com/mnist/train-labels-idx1-ubyte.gz',
-         'd53e105ee54ea40749a09fcbcd1e9432'),
+         'd53e105ee54ea749a09fcbcd1e9432'),
         ('https://ossci-datasets.s3.amazonaws.com/mnist/t10k-images-idx3-ubyte.gz',
          '9fb629c4189551a2d022fa330f9573f3'),
         ('https://ossci-datasets.s3.amazonaws.com/mnist/t10k-labels-idx1-ubyte.gz',
@@ -37,11 +37,15 @@ class MNIST_Custom(datasets.VisionDataset):
 
     training_file = 'training.pt'
     test_file = 'test.pt'
+    dataset_info = {
+        'train_size': 60000
+    }
 
     def __init__(self, root, train=True, transform=None, target_transform=None):
         log_debug("=== Initializing MNIST_Custom Dataset ===")
         log_debug(f"Root directory: {root}")
         log_debug(f"Train mode: {train}")
+        log_debug(f"Training set size: {self.dataset_info['train_size']} images")
         
         super(MNIST_Custom, self).__init__(root, transform=transform,
                                          target_transform=target_transform)
@@ -329,6 +333,8 @@ class DigitClassifier:
             transforms.Normalize((0.1307,), (0.3081,))
         ])
 
+        self.dataset_info = MNIST_Custom.dataset_info
+
     def evaluate_model(self):
         """Evaluate the model on the test dataset and return accuracy."""
         try:
@@ -505,6 +511,17 @@ class DigitClassifier:
         except Exception as e:
             print(f"Error resetting weights: {str(e)}")
             return False
+
+    def get_dataset_info(self):
+        """Return information about the MNIST dataset."""
+        try:
+            return {
+                'success': True,
+                'info': self.dataset_info
+            }
+        except Exception as e:
+            print(f"Error getting dataset info: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
 # Initialize the classifier
 print("Initializing DigitClassifier...")
