@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, jsonify, Response
 import os
-from werkzeug.utils import secure_filename
 import base64
 import re
 import traceback
@@ -18,11 +17,6 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def save_base64_image(base64_string):
     try:
@@ -48,8 +42,7 @@ def process_image_for_prediction(image_path):
     image = Image.open(os.path.join('static', image_path)).convert('L')  # Convert to grayscale
     
     # Invert colors for drawn images (since MNIST has white digits on black background)
-    if 'drawing' in image_path:
-        image = Image.fromarray(255 - np.array(image))
+    image = Image.fromarray(255 - np.array(image))
     
     # Resize and add padding to maintain aspect ratio
     target_size = 28
@@ -96,33 +89,14 @@ def home():
                     'prediction': prediction
                 })
             
-            # Handle file upload
-            elif 'image' in request.files:
-                file = request.files['image']
-                if file.filename != '' and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    image_path = f'uploads/{filename}'
-                    
-                    # Make prediction
-                    image_tensor = process_image_for_prediction(image_path)
-                    prediction = classifier.predict(image_tensor)
-                    
-                    return render_template('index.html', 
-                                         uploaded_image=image_path,
-                                         prediction=prediction)
-                else:
-                    return jsonify({'success': False, 'error': 'Invalid file type or no file selected'})
-            
-            return jsonify({'success': False, 'error': 'No image data or file provided'})
+            return jsonify({'success': False, 'error': 'No image data provided'})
         
         except Exception as e:
             print(f"Error processing request: {str(e)}")
             print(traceback.format_exc())
             return jsonify({'success': False, 'error': str(e)}), 500
     
-    return render_template('index.html', uploaded_image=None)
+    return render_template('index.html')
 
 @app.route('/train')
 def train():
