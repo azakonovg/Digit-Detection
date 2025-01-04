@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digit Drawing & Upload App</title>
+    <title>Digit Detection App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -114,10 +114,53 @@
             margin: 10px 0;
             color: #333;
         }
+        .training-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .training-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+        }
+        
+        .stat-box {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .prediction {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
-    <h1>Digit Drawing & Upload App</h1>
+    <h1>Digit Detection App</h1>
     
     <div class="container">
         <div class="drawing-section">
@@ -147,6 +190,27 @@
         </div>
     </div>
 
+    <!-- Training Section -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Model Training</h5>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="epochs">Number of Epochs:</label>
+                <input type="number" id="epochs" class="form-control" value="5" min="1" max="100">
+            </div>
+            <button id="trainButton" class="btn btn-primary mt-2" onclick="startTraining()">Train Model</button>
+            
+            <div class="mt-3">
+                <div class="progress">
+                    <div id="trainingProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="trainingStatus" class="mt-2 text-muted">Not started</div>
+            </div>
+        </div>
+    </div>
+
     <div class="result-section">
         <h2>Results</h2>
         <div class="result-container" id="resultContainer">
@@ -154,6 +218,11 @@
             <div class="image-card">
                 <h4>Uploaded Image</h4>
                 <img src="{{ url_for('static', filename=uploaded_image) }}" alt="Uploaded Image">
+                {% if prediction is not none %}
+                <div class="prediction">
+                    Predicted Digit: {{ prediction }}
+                </div>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -238,7 +307,6 @@
         function submitDrawing() {
             const imageData = canvas.toDataURL('image/png');
             
-            // Create a form and submit the image data
             const form = new FormData();
             form.append('image_data', imageData);
             
@@ -249,19 +317,19 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Create new image card
                     const imageCard = document.createElement('div');
                     imageCard.className = 'image-card';
                     imageCard.innerHTML = `
                         <h4>Drawn Digit</h4>
                         <img src="${STATIC_URL}${data.image_path}" alt="Drawn Digit">
+                        <div class="prediction">
+                            Predicted Digit: ${data.prediction}
+                        </div>
                     `;
                     
-                    // Add to result container
                     const resultContainer = document.getElementById('resultContainer');
                     resultContainer.insertBefore(imageCard, resultContainer.firstChild);
                     
-                    // Clear canvas for next drawing
                     clearCanvas();
                 }
             })
@@ -296,6 +364,58 @@
                 return false;
             }
             return true;
+        }
+
+        function startTraining() {
+            const epochs = document.getElementById('epochs').value || 5;
+            const progressBar = document.getElementById('trainingProgress');
+            const statusText = document.getElementById('trainingStatus');
+            const trainButton = document.getElementById('trainButton');
+            
+            // Disable the train button during training
+            trainButton.disabled = true;
+            progressBar.style.width = '0%';
+            statusText.textContent = 'Starting training...';
+            
+            const eventSource = new EventSource(`/train?epochs=${epochs}`);
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.status === 'error') {
+                    statusText.textContent = `Error: ${data.message}`;
+                    progressBar.classList.add('bg-danger');
+                    eventSource.close();
+                    trainButton.disabled = false;
+                    return;
+                }
+                
+                if (data.status === 'completed') {
+                    statusText.textContent = data.message;
+                    progressBar.style.width = '100%';
+                    progressBar.classList.remove('bg-danger');
+                    progressBar.classList.add('bg-success');
+                    eventSource.close();
+                    trainButton.disabled = false;
+                    return;
+                }
+                
+                // Regular progress update
+                if (data.batch !== undefined && data.total_batches !== undefined) {
+                    const progress = (data.batch / data.total_batches) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    statusText.textContent = `Epoch ${data.epoch}, Batch ${data.batch}/${data.total_batches}, ` +
+                                          `Loss: ${data.loss.toFixed(4)}, Accuracy: ${data.accuracy.toFixed(2)}%`;
+                }
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                statusText.textContent = 'Connection lost. Training may continue in the background.';
+                progressBar.classList.add('bg-warning');
+                eventSource.close();
+                trainButton.disabled = false;
+            };
         }
     </script>
 </body>
