@@ -461,7 +461,7 @@ class DigitClassifier:
             
             # Update model and optimizer
             self.model = new_model
-            self.optimizer = optim.Adam(self.model.parameters())
+            self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
             self.hidden_sizes = hidden_sizes
             
             # Save the new model with metadata

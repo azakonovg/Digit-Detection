@@ -576,9 +576,22 @@
                                     </div>
                                 </div>
                                 <div class="total-params">Total Learnable Parameters: ${data.total_parameters.toLocaleString()}</div>
+                                <div class="weight-explanation" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Understanding Neural Network Weights</h4>
+                                    <p style="color: #666; line-height: 1.5;">
+                                        The lines connecting neurons represent weights - numbers that determine how strongly each input affects the next neuron.
+                                        During training, these weights are automatically adjusted to improve accuracy:
+                                    </p>
+                                    <ul style="color: #666; margin-top: 10px;">
+                                        <li><strong>Thick lines</strong> (like 0.8) = Strong connection, this input has a big effect</li>
+                                        <li><strong>Thin lines</strong> (like 0.1) = Weak connection, this input has little effect</li>
+                                        <li>Weights can range from very small (near 0) to large (near 1)</li>
+                                        <li>Some example weights are shown on the connections</li>
+                                    </ul>
+                                </div>
                                 <p style="margin-top: 15px; color: #666;">
                                     This neural network learns to recognize handwritten digits by processing the image through multiple layers.
-                                    Each neuron is connected to all neurons in the next layer, and the connections (weights) are adjusted during training.
+                                    Each neuron is connected to all neurons in the next layer, and the weights are adjusted during training.
                                     The ReLU activation helps the network learn complex patterns, while the final layer uses Softmax to predict the digit.
                                 </p>`;
                             
@@ -604,6 +617,14 @@
                 svg.removeChild(svg.lastChild);
             }
             
+            // Generate some example weights for visualization
+            const exampleWeights = [
+                { from: 0, to: 0, weight: 0.8 },
+                { from: 0, to: 1, weight: 0.3 },
+                { from: 1, to: 0, weight: 0.6 },
+                { from: 1, to: 1, weight: 0.1 },
+            ];
+            
             // Draw connections between layers
             for (let i = 0; i < layers.length - 1; i++) {
                 const currentLayer = layers[i];
@@ -623,17 +644,65 @@
                             const toX = toRect.left - svg.getBoundingClientRect().left;
                             const toY = toRect.top - svg.getBoundingClientRect().top + toRect.height / 2;
                             
-                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                            // Find if this is one of our example connections
+                            const exampleWeight = exampleWeights.find(w => 
+                                i === 0 && w.from === fromIndex && w.to === toIndex
+                            );
+                            
+                            // Use example weight or random weight
+                            const weight = exampleWeight ? exampleWeight.weight : Math.random() * 0.3 + 0.1;
+                            
+                            // Calculate line properties based on weight
+                            const strokeWidth = Math.max(1, weight * 10);  // Reduced from 20 to 10 for thinner lines
+                            const opacity = Math.max(0.2, weight);  // Slightly reduced minimum opacity
+                            
+                            // Create background line (shadow effect)
+                            const shadowLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                             const controlPoint1X = fromX + (toX - fromX) * 0.4;
                             const controlPoint2X = fromX + (toX - fromX) * 0.6;
                             
-                            line.setAttribute('d', `M ${fromX} ${fromY} C ${controlPoint1X} ${fromY}, ${controlPoint2X} ${toY}, ${toX} ${toY}`);
-                            line.setAttribute('stroke', '#95a5a6');
-                            line.setAttribute('stroke-width', '1');
-                            line.setAttribute('fill', 'none');
-                            line.setAttribute('opacity', '0.2');
+                            shadowLine.setAttribute('d', `M ${fromX} ${fromY} C ${controlPoint1X} ${fromY}, ${controlPoint2X} ${toY}, ${toX} ${toY}`);
+                            shadowLine.setAttribute('stroke', '#e0e0e0');
+                            shadowLine.setAttribute('stroke-width', strokeWidth + 2);
+                            shadowLine.setAttribute('fill', 'none');
+                            shadowLine.setAttribute('opacity', 0.5);
+                            svg.appendChild(shadowLine);
                             
+                            // Create main connection line
+                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                            line.setAttribute('d', shadowLine.getAttribute('d'));
+                            line.setAttribute('stroke', '#2c3e50');
+                            line.setAttribute('stroke-width', strokeWidth);
+                            line.setAttribute('fill', 'none');
+                            line.setAttribute('opacity', opacity);
                             svg.appendChild(line);
+                            
+                            // Add weight label for example connections
+                            if (exampleWeight) {
+                                const pathLength = line.getTotalLength();
+                                const midPoint = line.getPointAtLength(pathLength / 2);
+                                
+                                // Create label background
+                                const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                                labelBg.setAttribute('x', midPoint.x - 20);
+                                labelBg.setAttribute('y', midPoint.y - 12);
+                                labelBg.setAttribute('width', 40);
+                                labelBg.setAttribute('height', 20);
+                                labelBg.setAttribute('fill', 'white');
+                                labelBg.setAttribute('rx', 5);
+                                svg.appendChild(labelBg);
+                                
+                                // Create weight label
+                                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                                label.setAttribute('x', midPoint.x);
+                                label.setAttribute('y', midPoint.y + 5);
+                                label.setAttribute('text-anchor', 'middle');
+                                label.setAttribute('fill', '#2c3e50');
+                                label.setAttribute('font-size', '12px');
+                                label.setAttribute('font-weight', 'bold');
+                                label.textContent = weight.toFixed(1);
+                                svg.appendChild(label);
+                            }
                         }
                     });
                 });
@@ -1048,7 +1117,13 @@
         
         function updateArchitecture() {
             const layers = Array.from(document.getElementsByClassName('layer-size'))
-                .map(input => parseInt(input.value));
+                .map(input => parseInt(input.value))
+                .filter(size => !isNaN(size));  // Filter out any invalid values
+            
+            if (layers.length === 0) {
+                alert('Please add at least one hidden layer');
+                return;
+            }
             
             if (!layers.every(size => size >= 1 && size <= 1000)) {
                 alert('Each layer must have between 1 and 1000 neurons');
