@@ -76,7 +76,7 @@
         }
         .result-container {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 10px;
         }
         .image-card {
@@ -86,8 +86,8 @@
             text-align: center;
         }
         .image-card img {
-            width: 120px;
-            height: 120px;
+            width: 80px;
+            height: 80px;
             border-radius: 4px;
             object-fit: contain;
         }
@@ -216,6 +216,126 @@
             border-radius: 4px;
             display: inline-block;
         }
+        .network-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .network-visualization {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative;
+            min-height: 400px;
+        }
+        .layer-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+        .connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .neuron {
+            width: 24px;
+            height: 24px;
+            background: #3498db;
+            border-radius: 50%;
+            margin: 4px;
+            position: relative;
+            z-index: 2;
+            border: 2px solid #2980b9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .neuron-group {
+            width: 24px;
+            height: 60px;
+            background: #3498db;
+            border-radius: 12px;
+            position: relative;
+            margin: 8px 0;
+            border: 2px solid #2980b9;
+        }
+        .neuron-label {
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: #2c3e50;
+        }
+        .layer-info {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 13px;
+            color: #666;
+            background: #f8f9fa;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        .activation-label {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            color: #e74c3c;
+            background: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            border: 1px solid #e74c3c;
+        }
+        .total-params {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-top: 20px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .network-controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .hidden-size-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .hidden-size-control input[type="range"] {
+            width: 200px;
+        }
+        .hidden-size-control input[type="number"] {
+            width: 70px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .hidden-size-label {
+            font-size: 14px;
+            color: #2c3e50;
+        }
     </style>
 </head>
 <body>
@@ -271,6 +391,153 @@
             </div>
         </div>
     </div>
+
+    <div class="container">
+        <h2 class="section-header">Simple Neural Network for Digit Recognition</h2>
+        <div class="network-info" id="networkInfo">
+            <!-- Network information will be populated here -->
+        </div>
+        
+        <div class="network-controls">
+            <div class="hidden-size-control">
+                <span class="hidden-size-label">Hidden Layer Size:</span>
+                <input type="range" id="hiddenSizeSlider" min="1" max="256" value="128" step="1">
+                <input type="number" id="hiddenSizeInput" min="1" max="256" value="128">
+                <button class="btn" onclick="updateHiddenSize()">Update Network</button>
+            </div>
+        </div>
+        
+        <script>
+        function loadNetworkInfo() {
+            fetch('/get_network_info')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('networkInfo');
+                    let html = `
+                        <div class="network-visualization">
+                            <!-- Input Layer -->
+                            <div class="layer-column">
+                                <div class="layer-title">Input Image<br>28×28 pixels</div>
+                                <div class="neurons">
+                                    <div class="neuron"></div>
+                                    <div class="neuron"></div>
+                                    <div class="neuron-group"></div>
+                                    <div class="neuron"></div>
+                                    <div class="neuron"></div>
+                                </div>
+                                <div class="layer-info">784 input neurons<br>(one per pixel)</div>
+                            </div>
+                            
+                            <!-- Hidden Layer -->
+                            <div class="layer-column">
+                                <div class="layer-title">Hidden Layer</div>
+                                <div class="neurons">
+                                    <div class="neuron"></div>
+                                    <div class="neuron"></div>
+                                    <div class="neuron-group"></div>
+                                    <div class="neuron"></div>
+                                    <div class="neuron"></div>
+                                </div>
+                                <div class="layer-info">128 neurons with ReLU<br>Learning patterns</div>
+                            </div>
+                            
+                            <!-- Output Layer -->
+                            <div class="layer-column">
+                                <div class="layer-title">Output Layer</div>
+                                <div class="neurons">
+                                    <div class="neuron"><span class="neuron-label">0</span></div>
+                                    <div class="neuron"><span class="neuron-label">1</span></div>
+                                    <div class="neuron"><span class="neuron-label">2</span></div>
+                                    <div class="neuron"><span class="neuron-label">3</span></div>
+                                    <div class="neuron"><span class="neuron-label">4</span></div>
+                                    <div class="neuron"><span class="neuron-label">5</span></div>
+                                    <div class="neuron"><span class="neuron-label">6</span></div>
+                                    <div class="neuron"><span class="neuron-label">7</span></div>
+                                    <div class="neuron"><span class="neuron-label">8</span></div>
+                                    <div class="neuron"><span class="neuron-label">9</span></div>
+                                </div>
+                                <div class="layer-info">10 output neurons<br>One per digit (0-9)</div>
+                            </div>
+
+                            <!-- Connection lines will be drawn using SVG -->
+                            <svg class="connections" width="100%" height="100%" style="position: absolute; top: 0; left: 0;">
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                                    refX="9" refY="3.5" orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" fill="#95a5a6"/>
+                                    </marker>
+                                </defs>
+                                <!-- Connection lines will be added by JavaScript -->
+                            </svg>
+                        </div>
+                        <div class="total-params">Total Learnable Parameters: ${data.total_parameters.toLocaleString()}</div>
+                        <p style="margin-top: 15px; color: #666;">
+                            This neural network learns to recognize handwritten digits by processing the image through three layers.
+                            Each neuron is connected to all neurons in the next layer, and the connections (weights) are adjusted during training.
+                            The ReLU activation helps the network learn complex patterns, while the final layer uses Softmax to predict the digit.
+                        </p>
+                    `;
+                    container.innerHTML = html;
+                    
+                    // Add connection lines after the elements are added to the DOM
+                    setTimeout(drawConnections, 100);
+                })
+                .catch(error => {
+                    console.error('Error loading network info:', error);
+                });
+        }
+        
+        function drawConnections() {
+            const svg = document.querySelector('.connections');
+            const layers = document.querySelectorAll('.layer-column');
+            
+            // Clear existing lines
+            while (svg.lastChild) {
+                if (svg.lastChild.tagName === 'defs') break;
+                svg.removeChild(svg.lastChild);
+            }
+            
+            // Draw some sample connections between layers
+            for (let i = 0; i < layers.length - 1; i++) {
+                const currentLayer = layers[i];
+                const nextLayer = layers[i + 1];
+                const currentNeurons = currentLayer.querySelectorAll('.neuron');
+                const nextNeurons = nextLayer.querySelectorAll('.neuron');
+                
+                // Draw a subset of connections for visual clarity
+                currentNeurons.forEach((fromNeuron, fromIndex) => {
+                    if (fromIndex % 2 === 0) {  // Draw connections from every other neuron
+                        nextNeurons.forEach((toNeuron, toIndex) => {
+                            if (toIndex % 2 === 0) {  // Connect to every other neuron in next layer
+                                const fromRect = fromNeuron.getBoundingClientRect();
+                                const toRect = toNeuron.getBoundingClientRect();
+                                const svgRect = svg.getBoundingClientRect();
+                                
+                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                line.setAttribute('x1', fromRect.left - svgRect.left + fromRect.width/2);
+                                line.setAttribute('y1', fromRect.top - svgRect.top + fromRect.height/2);
+                                line.setAttribute('x2', toRect.left - svgRect.left + toRect.width/2);
+                                line.setAttribute('y2', toRect.top - svgRect.top + toRect.height/2);
+                                line.setAttribute('stroke', '#95a5a6');
+                                line.setAttribute('stroke-width', '1');
+                                line.setAttribute('opacity', '0.2');
+                                svg.appendChild(line);
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // Add window resize handler to redraw connections
+        window.addEventListener('resize', drawConnections);
+
+        // Call this function when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadNetworkInfo();
+            loadMNISTSamples();
+        });
+    </script>
 
     <script>
         const STATIC_URL = "{{ url_for('static', filename='') }}";
@@ -552,6 +819,63 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadMNISTSamples();
             loadDatasetInfo();
+        });
+
+        // Add these functions for hidden size control
+        function initHiddenSizeControls() {
+            const slider = document.getElementById('hiddenSizeSlider');
+            const input = document.getElementById('hiddenSizeInput');
+            
+            slider.addEventListener('input', (e) => {
+                input.value = e.target.value;
+            });
+            
+            input.addEventListener('change', (e) => {
+                const value = parseInt(e.target.value);
+                if (value < 1) input.value = 1;
+                if (value > 256) input.value = 256;
+                slider.value = input.value;
+            });
+        }
+        
+        function updateHiddenSize() {
+            const newSize = parseInt(document.getElementById('hiddenSizeInput').value);
+            const button = document.querySelector('.hidden-size-control button');
+            button.disabled = true;
+            
+            fetch('/update_hidden_size', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ hidden_size: newSize })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload network visualization
+                    loadNetworkInfo();
+                    // Reset model accuracy display
+                    const accuracyDisplay = document.getElementById('modelAccuracy');
+                    if (accuracyDisplay) accuracyDisplay.textContent = '';
+                } else {
+                    alert('Error updating network: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating network');
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+        }
+        
+        // Update the DOMContentLoaded event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            initHiddenSizeControls();
+            loadNetworkInfo();
+            loadMNISTSamples();
         });
     </script>
 </body>

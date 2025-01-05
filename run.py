@@ -234,5 +234,26 @@ def get_dataset_info():
         print(f"Error getting dataset info: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/get_network_info')
+def get_network_info():
+    """Get information about the neural network architecture."""
+    return jsonify(classifier.get_network_info())
+
+@app.route('/update_hidden_size', methods=['POST'])
+def update_hidden_size():
+    try:
+        new_size = int(request.json.get('hidden_size', 128))
+        if new_size < 1 or new_size > 1000:
+            return jsonify({'success': False, 'error': 'Hidden size must be between 1 and 1000'}), 400
+            
+        result = classifier.update_hidden_size(new_size)
+        if result['success']:
+            return jsonify({'success': True, 'message': f'Hidden layer size updated to {new_size}'})
+        else:
+            return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
+    except Exception as e:
+        print(f"Error updating hidden size: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

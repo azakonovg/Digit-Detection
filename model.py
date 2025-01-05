@@ -283,34 +283,61 @@ class MNIST_Custom(datasets.VisionDataset):
             return labels
 
 class DigitNet(nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_size=128):
         super(DigitNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.dropout1 = nn.Dropout2d(0.25)
-        self.dropout2 = nn.Dropout2d(0.5)
-        self.fc1 = nn.Linear(64 * 7 * 7, 128)
-        self.fc2 = nn.Linear(128, 10)
-
+        # Input layer: 28x28=784 nodes (flattened image) -> hidden_size nodes
+        self.fc1 = nn.Linear(28 * 28, hidden_size)
+        # Output layer: hidden_size nodes -> 10 nodes (digits 0-9)
+        self.fc2 = nn.Linear(hidden_size, 10)
+        self.hidden_size = hidden_size
+        
+        # Store layer information
+        self.layer_info = [
+            {
+                'name': 'Input Layer',
+                'type': 'Flatten',
+                'input_shape': '28x28',
+                'output_shape': '784'
+            },
+            {
+                'name': 'Hidden Layer (fc1)',
+                'type': 'Linear + ReLU',
+                'input_shape': '784',
+                'output_shape': str(hidden_size),
+                'parameters': self.fc1.weight.shape[0] * self.fc1.weight.shape[1] + self.fc1.bias.shape[0]
+            },
+            {
+                'name': 'Output Layer (fc2)',
+                'type': 'Linear + LogSoftmax',
+                'input_shape': str(hidden_size),
+                'output_shape': '10',
+                'parameters': self.fc2.weight.shape[0] * self.fc2.weight.shape[1] + self.fc2.bias.shape[0]
+            }
+        ]
+        
+    def get_network_info(self):
+        total_params = sum(p.numel() for p in self.parameters())
+        return {
+            'layers': self.layer_info,
+            'total_parameters': total_params
+        }
+        
     def forward(self, x):
-        # Use non-inplace operations
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2)
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
+        # Flatten the input image
+        x = x.view(-1, 28 * 28)
+        # First layer with ReLU activation
         x = F.relu(self.fc1(x))
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        # Output layer with log softmax for classification
+        x = F.log_softmax(self.fc2(x), dim=1)
+        return x
 
 class DigitClassifier:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
         
-        self.model = DigitNet().to(self.device)
+        self.hidden_size = 128  # Default hidden size
+        self.model = DigitNet(hidden_size=self.hidden_size).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters())
         self.model_path = 'static/model/digit_model.pth'
         
@@ -334,6 +361,10 @@ class DigitClassifier:
         ])
 
         self.dataset_info = MNIST_Custom.dataset_info
+        
+    def get_network_info(self):
+        """Get information about the neural network architecture."""
+        return self.model.get_network_info()
 
     def evaluate_model(self):
         """Evaluate the model on the test dataset and return accuracy."""
@@ -522,6 +553,14 @@ class DigitClassifier:
         except Exception as e:
             print(f"Error getting dataset info: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def update_hidden_size(self, new_size):
+        """Update the model with a new hidden layer size."""
+        self.hidden_size = new_size
+        self.model = DigitNet(hidden_size=new_size).to(self.device)
+        self.optimizer = optim.Adam(self.model.parameters())
+        print(f"Model updated with hidden size: {new_size}")
+        return {'success': True}
 
 # Initialize the classifier
 print("Initializing DigitClassifier...")
