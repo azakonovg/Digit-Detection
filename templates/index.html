@@ -577,22 +577,15 @@
                                 </div>
                                 <div class="total-params">Total Learnable Parameters: ${data.total_parameters.toLocaleString()}</div>
                                 <div class="weight-explanation" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
-                                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Understanding Neural Network Weights</h4>
+                                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Neural Network Weights</h4>
                                     <p style="color: #666; line-height: 1.5;">
-                                        The lines connecting neurons represent weights - numbers that determine how strongly each input affects the next neuron.
-                                        During training, these weights are automatically adjusted to improve accuracy:
+                                        Lines show connections between neurons. Thicker lines mean stronger connections.
+                                        During training, these connections automatically adjust to recognize digits better.
                                     </p>
-                                    <ul style="color: #666; margin-top: 10px;">
-                                        <li><strong>Thick lines</strong> (like 0.8) = Strong connection, this input has a big effect</li>
-                                        <li><strong>Thin lines</strong> (like 0.1) = Weak connection, this input has little effect</li>
-                                        <li>Weights can range from very small (near 0) to large (near 1)</li>
-                                        <li>Some example weights are shown on the connections</li>
-                                    </ul>
                                 </div>
                                 <p style="margin-top: 15px; color: #666;">
-                                    This neural network learns to recognize handwritten digits by processing the image through multiple layers.
-                                    Each neuron is connected to all neurons in the next layer, and the weights are adjusted during training.
-                                    The ReLU activation helps the network learn complex patterns, while the final layer uses Softmax to predict the digit.
+                                    Each neuron processes its inputs and passes results to the next layer. 
+                                    ReLU activation helps learn patterns, and the final layer predicts the digit (0-9).
                                 </p>`;
                             
                             container.innerHTML = html;
