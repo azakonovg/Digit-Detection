@@ -336,6 +336,43 @@
             font-size: 14px;
             color: #2c3e50;
         }
+        .layer-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        .layer-input {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .layer-input label {
+            margin-right: 10px;
+            min-width: 100px;
+        }
+        .layer-input input {
+            width: 100px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .layer-buttons {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .update-btn {
+            margin-left: auto;
+            background-color: #2ecc71;
+        }
+        .update-btn:hover {
+            background-color: #27ae60;
+        }
     </style>
 </head>
 <body>
@@ -399,11 +436,16 @@
         </div>
         
         <div class="network-controls">
-            <div class="hidden-size-control">
-                <span class="hidden-size-label">Hidden Layer Size:</span>
-                <input type="range" id="hiddenSizeSlider" min="1" max="256" value="128" step="1">
-                <input type="number" id="hiddenSizeInput" min="1" max="256" value="128">
-                <button class="btn" onclick="updateHiddenSize()">Update Network</button>
+            <div class="layer-controls">
+                <h3>Hidden Layers Configuration</h3>
+                <div id="layerInputs">
+                    <!-- Layer inputs will be added here dynamically -->
+                </div>
+                <div class="layer-buttons">
+                    <button class="btn" onclick="addLayer()">Add Layer</button>
+                    <button class="btn" onclick="removeLayer()">Remove Layer</button>
+                    <button class="btn update-btn" onclick="updateArchitecture()">Update Network</button>
+                </div>
             </div>
         </div>
         
@@ -413,6 +455,8 @@
                 .then(response => response.json())
                 .then(data => {
                     const container = document.getElementById('networkInfo');
+                    const hiddenLayers = data.layers.filter(layer => layer.name.includes('Hidden Layer'));
+                    
                     let html = `
                         <div class="network-visualization">
                             <!-- Input Layer -->
@@ -426,11 +470,13 @@
                                     <div class="neuron"></div>
                                 </div>
                                 <div class="layer-info">784 input neurons<br>(one per pixel)</div>
-                            </div>
-                            
-                            <!-- Hidden Layer -->
+                            </div>`;
+                    
+                    // Add hidden layers
+                    hiddenLayers.forEach((layer, index) => {
+                        html += `
                             <div class="layer-column">
-                                <div class="layer-title">Hidden Layer</div>
+                                <div class="layer-title">Hidden Layer ${index + 1}</div>
                                 <div class="neurons">
                                     <div class="neuron"></div>
                                     <div class="neuron"></div>
@@ -438,10 +484,12 @@
                                     <div class="neuron"></div>
                                     <div class="neuron"></div>
                                 </div>
-                                <div class="layer-info">128 neurons with ReLU<br>Learning patterns</div>
-                            </div>
-                            
-                            <!-- Output Layer -->
+                                <div class="layer-info">${layer.output_shape} neurons with ReLU<br>Learning patterns</div>
+                            </div>`;
+                    });
+                    
+                    // Add output layer
+                    html += `
                             <div class="layer-column">
                                 <div class="layer-title">Output Layer</div>
                                 <div class="neurons">
@@ -472,7 +520,7 @@
                         </div>
                         <div class="total-params">Total Learnable Parameters: ${data.total_parameters.toLocaleString()}</div>
                         <p style="margin-top: 15px; color: #666;">
-                            This neural network learns to recognize handwritten digits by processing the image through three layers.
+                            This neural network learns to recognize handwritten digits by processing the image through multiple layers.
                             Each neuron is connected to all neurons in the next layer, and the connections (weights) are adjusted during training.
                             The ReLU activation helps the network learn complex patterns, while the final layer uses Softmax to predict the digit.
                         </p>
@@ -874,6 +922,116 @@
         // Update the DOMContentLoaded event listener
         document.addEventListener('DOMContentLoaded', function() {
             initHiddenSizeControls();
+            loadNetworkInfo();
+            loadMNISTSamples();
+        });
+
+        function initLayerControls() {
+            // Get current model architecture
+            fetch('/get_network_info')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('layerInputs');
+                    container.innerHTML = ''; // Clear existing inputs
+                    
+                    // Filter hidden layers
+                    const hiddenLayers = data.layers.filter(layer => layer.name.includes('Hidden Layer'));
+                    
+                    // Add input for each hidden layer
+                    hiddenLayers.forEach((layer, index) => {
+                        const layerDiv = document.createElement('div');
+                        layerDiv.className = 'layer-input';
+                        layerDiv.innerHTML = `
+                            <label>Hidden Layer ${index + 1}:</label>
+                            <input type="number" class="layer-size" value="${layer.output_shape}" min="1" max="1000">
+                            <span style="margin-left: 10px;">neurons</span>
+                        `;
+                        container.appendChild(layerDiv);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading network architecture:', error);
+                    // Add at least one layer as fallback
+                    addLayer();
+                });
+        }
+        
+        function addLayer() {
+            const container = document.getElementById('layerInputs');
+            const layerCount = container.children.length;
+            
+            if (layerCount >= 5) {
+                alert('Maximum 5 hidden layers allowed');
+                return;
+            }
+            
+            const layerDiv = document.createElement('div');
+            layerDiv.className = 'layer-input';
+            layerDiv.innerHTML = `
+                <label>Hidden Layer ${layerCount + 1}:</label>
+                <input type="number" class="layer-size" value="128" min="1" max="1000">
+                <span style="margin-left: 10px;">neurons</span>
+            `;
+            
+            container.appendChild(layerDiv);
+        }
+        
+        function removeLayer() {
+            const container = document.getElementById('layerInputs');
+            if (container.children.length > 1) {
+                container.removeChild(container.lastChild);
+            }
+        }
+        
+        function updateArchitecture() {
+            const layers = Array.from(document.getElementsByClassName('layer-size'))
+                .map(input => parseInt(input.value));
+            
+            if (!layers.every(size => size >= 1 && size <= 1000)) {
+                alert('Each layer must have between 1 and 1000 neurons');
+                return;
+            }
+            
+            const button = document.querySelector('.update-btn');
+            const statusText = document.getElementById('trainingStatus');
+            button.disabled = true;
+            statusText.textContent = 'Updating network architecture...';
+            
+            fetch('/update_hidden_size', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ layers: layers })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusText.textContent = `Network architecture updated successfully with layers: ${layers.join(', ')}`;
+                    // Reload network visualization
+                    loadNetworkInfo();
+                    // Reset model accuracy display
+                    const accuracyDisplay = document.getElementById('modelAccuracy');
+                    if (accuracyDisplay) accuracyDisplay.textContent = 'Model architecture changed. Please train the model.';
+                } else {
+                    const errorMessage = data.error || 'Unknown error occurred';
+                    statusText.textContent = `Error: ${errorMessage}`;
+                    alert('Error updating network: ' + errorMessage);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusText.textContent = 'Failed to update network architecture';
+                alert('Error updating network: ' + error.message);
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
+        }
+        
+        // Update the DOMContentLoaded event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            initLayerControls();
             loadNetworkInfo();
             loadMNISTSamples();
         });

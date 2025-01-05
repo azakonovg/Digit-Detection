@@ -242,17 +242,22 @@ def get_network_info():
 @app.route('/update_hidden_size', methods=['POST'])
 def update_hidden_size():
     try:
-        new_size = int(request.json.get('hidden_size', 128))
-        if new_size < 1 or new_size > 1000:
-            return jsonify({'success': False, 'error': 'Hidden size must be between 1 and 1000'}), 400
+        data = request.json
+        if 'layers' not in data:
+            return jsonify({'success': False, 'error': 'No layer configuration provided'}), 400
             
-        result = classifier.update_hidden_size(new_size)
+        layers = data['layers']
+        # Validate layer configuration
+        if not isinstance(layers, list) or not all(isinstance(size, int) and 1 <= size <= 1000 for size in layers):
+            return jsonify({'success': False, 'error': 'Invalid layer configuration. Each layer must have 1-1000 neurons'}), 400
+            
+        result = classifier.update_architecture(layers)
         if result['success']:
-            return jsonify({'success': True, 'message': f'Hidden layer size updated to {new_size}'})
+            return jsonify({'success': True, 'message': f'Network architecture updated with layers: {layers}'})
         else:
             return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
     except Exception as e:
-        print(f"Error updating hidden size: {str(e)}")
+        print(f"Error updating network architecture: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':

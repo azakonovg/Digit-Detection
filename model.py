@@ -283,13 +283,22 @@ class MNIST_Custom(datasets.VisionDataset):
             return labels
 
 class DigitNet(nn.Module):
-    def __init__(self, hidden_size=128):
+    def __init__(self, hidden_sizes=[128]):
         super(DigitNet, self).__init__()
-        # Input layer: 28x28=784 nodes (flattened image) -> hidden_size nodes
-        self.fc1 = nn.Linear(28 * 28, hidden_size)
-        # Output layer: hidden_size nodes -> 10 nodes (digits 0-9)
-        self.fc2 = nn.Linear(hidden_size, 10)
-        self.hidden_size = hidden_size
+        
+        # Create a list to store all layers
+        self.layers = nn.ModuleList()
+        
+        # Input layer: 28x28=784 nodes (flattened image) -> first hidden layer
+        prev_size = 28 * 28
+        
+        # Create hidden layers
+        for i, hidden_size in enumerate(hidden_sizes):
+            self.layers.append(nn.Linear(prev_size, hidden_size))
+            prev_size = hidden_size
+        
+        # Output layer: last hidden layer -> 10 nodes (digits 0-9)
+        self.layers.append(nn.Linear(prev_size, 10))
         
         # Store layer information
         self.layer_info = [
@@ -298,37 +307,57 @@ class DigitNet(nn.Module):
                 'type': 'Flatten',
                 'input_shape': '28x28',
                 'output_shape': '784'
-            },
-            {
-                'name': 'Hidden Layer (fc1)',
-                'type': 'Linear + ReLU',
-                'input_shape': '784',
-                'output_shape': str(hidden_size),
-                'parameters': self.fc1.weight.shape[0] * self.fc1.weight.shape[1] + self.fc1.bias.shape[0]
-            },
-            {
-                'name': 'Output Layer (fc2)',
-                'type': 'Linear + LogSoftmax',
-                'input_shape': str(hidden_size),
-                'output_shape': '10',
-                'parameters': self.fc2.weight.shape[0] * self.fc2.weight.shape[1] + self.fc2.bias.shape[0]
             }
         ]
         
+        # Add hidden layers info
+        total_params = 0
+        for i, hidden_size in enumerate(hidden_sizes):
+            layer = self.layers[i]
+            # Calculate parameters: (input_size * output_size) + output_size
+            # input_size * output_size for weights, output_size for biases
+            params = layer.weight.numel() + layer.bias.numel()
+            total_params += params
+            self.layer_info.append({
+                'name': f'Hidden Layer {i+1}',
+                'type': 'Linear + ReLU',
+                'input_shape': str(layer.in_features),
+                'output_shape': str(layer.out_features),
+                'parameters': params
+            })
+        
+        # Add output layer info
+        output_layer = self.layers[-1]
+        output_params = output_layer.weight.numel() + output_layer.bias.numel()
+        total_params += output_params
+        self.layer_info.append({
+            'name': 'Output Layer',
+            'type': 'Linear + LogSoftmax',
+            'input_shape': str(output_layer.in_features),
+            'output_shape': '10',
+            'parameters': output_params
+        })
+        
+        # Store total parameters
+        self.total_params = total_params
+        
     def get_network_info(self):
-        total_params = sum(p.numel() for p in self.parameters())
+        """Get information about the neural network architecture."""
         return {
             'layers': self.layer_info,
-            'total_parameters': total_params
+            'total_parameters': self.total_params
         }
         
     def forward(self, x):
         # Flatten the input image
         x = x.view(-1, 28 * 28)
-        # First layer with ReLU activation
-        x = F.relu(self.fc1(x))
-        # Output layer with log softmax for classification
-        x = F.log_softmax(self.fc2(x), dim=1)
+        
+        # Pass through hidden layers with ReLU activation
+        for i in range(len(self.layers) - 1):
+            x = F.relu(self.layers[i](x))
+        
+        # Output layer with log softmax
+        x = F.log_softmax(self.layers[-1](x), dim=1)
         return x
 
 class DigitClassifier:
@@ -336,8 +365,8 @@ class DigitClassifier:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
         
-        self.hidden_size = 128  # Default hidden size
-        self.model = DigitNet(hidden_size=self.hidden_size).to(self.device)
+        self.hidden_sizes = [128]  # Default hidden layer configuration
+        self.model = DigitNet(hidden_sizes=self.hidden_sizes).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters())
         self.model_path = 'static/model/digit_model.pth'
         
@@ -347,8 +376,39 @@ class DigitClassifier:
         # Initialize model with random weights or load if exists
         if os.path.exists(self.model_path):
             try:
-                self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
-                print("Loaded existing model")
+                # Try to load the model state and metadata
+                checkpoint = torch.load(self.model_path, map_location=self.device)
+                
+                # Check if it's the old format (with fc1 and fc2)
+                if isinstance(checkpoint, dict) and 'fc1.weight' in checkpoint:
+                    print("Converting old model format to new architecture...")
+                    # Create a temporary model with single hidden layer
+                    temp_model = DigitNet(hidden_sizes=[128]).to(self.device)
+                    # Map old layer names to new ones
+                    new_state_dict = {
+                        'layers.0.weight': checkpoint['fc1.weight'],
+                        'layers.0.bias': checkpoint['fc1.bias'],
+                        'layers.1.weight': checkpoint['fc2.weight'],
+                        'layers.1.bias': checkpoint['fc2.bias']
+                    }
+                    temp_model.load_state_dict(new_state_dict)
+                    # Save in new format with metadata
+                    self.save_model()
+                    print("Converted and saved model in new format")
+                else:
+                    # Check if the checkpoint has metadata
+                    if isinstance(checkpoint, dict) and 'hidden_sizes' in checkpoint:
+                        self.hidden_sizes = checkpoint['hidden_sizes']
+                        self.model = DigitNet(hidden_sizes=self.hidden_sizes).to(self.device)
+                        self.model.load_state_dict(checkpoint['state_dict'])
+                    else:
+                        print("No architecture metadata found, using default architecture")
+                        # Save current model with metadata
+                        self.save_model()
+                
+                print(f"Loaded model with architecture: {self.hidden_sizes}")
+                self.optimizer = optim.Adam(self.model.parameters())
+                
             except Exception as e:
                 print(f"Error loading model: {str(e)}")
                 print("Initializing with random weights")
@@ -361,7 +421,48 @@ class DigitClassifier:
         ])
 
         self.dataset_info = MNIST_Custom.dataset_info
-        
+
+    def save_model(self):
+        """Save model with architecture metadata"""
+        try:
+            checkpoint = {
+                'state_dict': self.model.state_dict(),
+                'hidden_sizes': self.hidden_sizes
+            }
+            torch.save(checkpoint, self.model_path)
+            print(f"Saved model with architecture: {self.hidden_sizes}")
+        except Exception as e:
+            print(f"Error saving model: {str(e)}")
+
+    def update_architecture(self, hidden_sizes):
+        """Update the model with new hidden layer sizes."""
+        try:
+            print(f"Updating model architecture with hidden sizes: {hidden_sizes}")
+            # Create new model with the specified architecture
+            new_model = DigitNet(hidden_sizes=hidden_sizes).to(self.device)
+            
+            # Initialize with random weights
+            def init_weights(m):
+                if isinstance(m, nn.Linear):
+                    torch.nn.init.xavier_uniform_(m.weight)
+                    m.bias.data.fill_(0.01)
+            
+            new_model.apply(init_weights)
+            
+            # Update model and optimizer
+            self.model = new_model
+            self.optimizer = optim.Adam(self.model.parameters())
+            self.hidden_sizes = hidden_sizes
+            
+            # Save the new model with metadata
+            self.save_model()
+            
+            return {'success': True}
+        except Exception as e:
+            error_msg = f"Error updating model architecture: {str(e)}"
+            print(error_msg)
+            return {'success': False, 'error': error_msg}
+
     def get_network_info(self):
         """Get information about the neural network architecture."""
         return self.model.get_network_info()
@@ -412,12 +513,12 @@ class DigitClassifier:
             print(f"Starting training for {epochs} epochs...")
             self.model.train()
             training_progress = []
+            last_save_time = time.time()
             
             for epoch in range(epochs):
                 running_loss = 0.0
                 correct = 0
                 total = 0
-                last_save_time = time.time()
                 
                 for batch_idx, (data, target) in enumerate(train_loader):
                     try:
@@ -461,7 +562,7 @@ class DigitClassifier:
                             current_time = time.time()
                             if current_time - last_save_time > 300:  # 300 seconds = 5 minutes
                                 try:
-                                    torch.save(self.model.state_dict(), self.model_path)
+                                    self.save_model()
                                     print(f"Periodic save at epoch {epoch + 1}, batch {batch_idx}")
                                     last_save_time = current_time
                                 except Exception as e:
@@ -475,7 +576,7 @@ class DigitClassifier:
                         print(f"Error in batch {batch_idx}: {str(e)}")
                         # Try to save model on error
                         try:
-                            torch.save(self.model.state_dict(), self.model_path)
+                            self.save_model()
                             print(f"Saved model after error in batch {batch_idx}")
                         except Exception as save_error:
                             print(f"Could not save model after error: {str(save_error)}")
@@ -483,14 +584,14 @@ class DigitClassifier:
                 
                 # Save model after each epoch
                 try:
-                    torch.save(self.model.state_dict(), self.model_path)
+                    self.save_model()
                     print(f"Saved model after epoch {epoch + 1}")
                 except Exception as e:
                     print(f"Error saving model after epoch: {str(e)}")
             
             # Final save attempt and evaluation
             try:
-                torch.save(self.model.state_dict(), self.model_path)
+                self.save_model()
                 print("Training completed successfully")
                 
                 # Evaluate model after training
@@ -553,14 +654,6 @@ class DigitClassifier:
         except Exception as e:
             print(f"Error getting dataset info: {str(e)}")
             return {'success': False, 'error': str(e)}
-
-    def update_hidden_size(self, new_size):
-        """Update the model with a new hidden layer size."""
-        self.hidden_size = new_size
-        self.model = DigitNet(hidden_size=new_size).to(self.device)
-        self.optimizer = optim.Adam(self.model.parameters())
-        print(f"Model updated with hidden size: {new_size}")
-        return {'success': True}
 
 # Initialize the classifier
 print("Initializing DigitClassifier...")
