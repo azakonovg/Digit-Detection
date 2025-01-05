@@ -314,28 +314,38 @@ class DigitNet(nn.Module):
         total_params = 0
         for i, hidden_size in enumerate(hidden_sizes):
             layer = self.layers[i]
-            # Calculate parameters: (input_size * output_size) + output_size
-            # input_size * output_size for weights, output_size for biases
-            params = layer.weight.numel() + layer.bias.numel()
+            # Calculate parameters:
+            # Weights: input_size * output_size
+            # Biases: output_size
+            weights_params = layer.in_features * layer.out_features
+            bias_params = layer.out_features
+            params = weights_params + bias_params
             total_params += params
             self.layer_info.append({
                 'name': f'Hidden Layer {i+1}',
                 'type': 'Linear + ReLU',
                 'input_shape': str(layer.in_features),
                 'output_shape': str(layer.out_features),
-                'parameters': params
+                'parameters': params,
+                'weights': weights_params,
+                'biases': bias_params
             })
         
         # Add output layer info
         output_layer = self.layers[-1]
-        output_params = output_layer.weight.numel() + output_layer.bias.numel()
+        # Calculate output layer parameters
+        output_weights_params = output_layer.in_features * output_layer.out_features
+        output_bias_params = output_layer.out_features
+        output_params = output_weights_params + output_bias_params
         total_params += output_params
         self.layer_info.append({
             'name': 'Output Layer',
             'type': 'Linear + LogSoftmax',
             'input_shape': str(output_layer.in_features),
             'output_shape': '10',
-            'parameters': output_params
+            'parameters': output_params,
+            'weights': output_weights_params,
+            'biases': output_bias_params
         })
         
         # Store total parameters
