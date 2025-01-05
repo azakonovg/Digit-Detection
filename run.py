@@ -185,14 +185,18 @@ def get_mnist_samples():
 @app.route('/get_accuracy')
 def get_accuracy():
     try:
+        print("Calculating model accuracy...")
         evaluation = classifier.evaluate_model()
         if evaluation['success']:
+            print(f"Accuracy calculation successful: {evaluation['accuracy']:.2f}%")
             return jsonify({'success': True, 'accuracy': evaluation['accuracy']})
         else:
+            print(f"Accuracy calculation failed: {evaluation.get('error', 'Unknown error')}")
             return jsonify({'success': False, 'error': evaluation.get('error', 'Unknown error')}), 500
     except Exception as e:
-        print(f"Error getting accuracy: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        error_msg = f"Error getting accuracy: {str(e)}"
+        print(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/reset_model', methods=['POST'])
 def reset_model():

@@ -76,7 +76,7 @@
         }
         .result-container {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 10px;
         }
         .image-card {
@@ -86,8 +86,8 @@
             text-align: center;
         }
         .image-card img {
-            width: 80px;
-            height: 80px;
+            width: 120px;
+            height: 120px;
             border-radius: 4px;
             object-fit: contain;
         }
@@ -416,8 +416,10 @@
                     eventSource.close();
                     trainButton.disabled = false;
                     
-                    // Get accuracy after training
-                    getModelAccuracy();
+                    // Add a small delay before getting accuracy
+                    setTimeout(() => {
+                        getModelAccuracy();
+                    }, 1000);
                     return;
                 }
                 
@@ -432,10 +434,15 @@
             
             eventSource.onerror = function(error) {
                 console.error('EventSource error:', error);
-                statusText.textContent = 'Connection lost. Training may continue in the background.';
-                progressBar.classList.add('bg-warning');
+                statusText.textContent = 'Training completed. Getting final accuracy...';
+                progressBar.classList.add('bg-success');
                 eventSource.close();
                 trainButton.disabled = false;
+                
+                // Get accuracy after error/completion
+                setTimeout(() => {
+                    getModelAccuracy();
+                }, 1000);
             };
         }
 
