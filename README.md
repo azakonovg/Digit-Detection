@@ -1,29 +1,40 @@
 # Digit Detection
 
-A web application for handwritten digit recognition using a PyTorch neural network trained on the MNIST dataset.
+An educational web application for handwritten digit recognition using a PyTorch neural network trained on the MNIST dataset. The application helps users understand neural networks through interactive visualization and experimentation.
+
+## Project Goals
+
+- Create an interactive web app for digit recognition
+- Provide training mode to learn from MNIST dataset
+- Visualize neural network architecture with weights and connections
+- Allow users to modify network layers and neurons
+- Serve as an educational tool for understanding neural networks
 
 ## Features
 
 - Interactive canvas for drawing digits
-- Real-time digit prediction using a convolutional neural network
+- Real-time digit prediction using neural network
 - Model training with progress visualization
 - Sample MNIST dataset images display
 - Model weight reset functionality
+- Network architecture visualization with weight connections
+- Customizable hidden layers and neurons
 - Detailed logging of dataset download and training process
 
 ## Technical Details
 
 - Neural Network Architecture:
-  - Convolutional Neural Network (CNN) with 2 convolutional layers
-  - Dropout layers for regularization
-  - Fully connected layers for classification
+  - Fully connected neural network with customizable layers
+  - ReLU activation for hidden layers
+  - Softmax activation for output layer
   - Trained on MNIST dataset
+  - Real-time weight visualization
 
 ## Setup
 
 1. Install dependencies:
 ```bash
-pip install torch torchvision flask pillow numpy requests
+pip install -r requirements.txt
 ```
 
 2. Run the application:
@@ -35,12 +46,11 @@ python3 run.py
 
 ## Usage
 
-1. Draw a digit (0-9) on the canvas using your mouse or touch input
-2. Click "Submit" to get the model's prediction
-3. Use "Clear" to reset the canvas
-4. Train the model with custom epochs using the "Train Model" button
-5. Reset model weights using the "Reset Model" button
-6. View sample images from the MNIST training dataset
+1. Draw digits on the canvas or view MNIST samples
+2. Train the model with custom epochs
+3. Watch how weights change during training
+4. Modify network architecture
+5. Test the model with your own drawings
 
 ## Model Training
 
