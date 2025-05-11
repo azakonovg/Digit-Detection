@@ -272,5 +272,56 @@ def update_hidden_size():
         print(f"Error updating network architecture: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/update_weight', methods=['POST'])
+def update_weight():
+    """Update a specific weight in the model."""
+    try:
+        data = request.json
+        print(f"Received weight update request: {data}")
+        
+        # Validate required parameters
+        required_params = ['layer_index', 'weight_indices']
+        for param in required_params:
+            if param not in data:
+                return jsonify({'success': False, 'error': f'Missing required parameter: {param}'}), 400
+        
+        # Extract parameters
+        layer_index = int(data['layer_index'])
+        
+        # Ensure weight_indices is properly formatted
+        if not isinstance(data['weight_indices'], list) or len(data['weight_indices']) != 2:
+            return jsonify({'success': False, 'error': 'weight_indices must be a list of two integers'}), 400
+            
+        weight_indices = [int(idx) for idx in data['weight_indices']]
+        
+        # Check if we are directly setting a value or using an increment
+        if 'new_value' in data:
+            new_value = float(data['new_value'])
+            print(f"Setting weight at layer {layer_index}, indices {weight_indices} to {new_value}")
+            result = classifier.update_weight(layer_index, weight_indices, new_value=new_value)
+        elif 'increment' in data:
+            increment = float(data['increment'])
+            print(f"Incrementing weight at layer {layer_index}, indices {weight_indices} by {increment}")
+            result = classifier.update_weight(layer_index, weight_indices, increment=increment)
+        else:
+            return jsonify({'success': False, 'error': 'Either new_value or increment must be provided'}), 400
+        
+        print(f"Update result: {result}")
+        
+        if result['success']:
+            return jsonify({
+                'success': True, 
+                'new_weight': result['new_weight'],
+                'accuracy': result['accuracy']
+            })
+        else:
+            return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
+            
+    except Exception as e:
+        error_msg = f"Error updating weight: {str(e)}"
+        print(error_msg)
+        print(traceback.format_exc())  # Print full traceback
+        return jsonify({'success': False, 'error': error_msg}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

@@ -733,7 +733,9 @@ class DigitClassifier:
                             'from_neuron': int(from_neuron),
                             'to_neuron': int(to_neuron),
                             'weight': float(weights[to_neuron, from_neuron]),
-                            'weight_abs': float(abs(weights[to_neuron, from_neuron]))
+                            'weight_abs': float(abs(weights[to_neuron, from_neuron])),
+                            'layer_index': i,
+                            'weight_index': [int(to_neuron), int(from_neuron)]
                         })
                 else:
                     for idx in indices:
@@ -747,7 +749,9 @@ class DigitClassifier:
                             'from_neuron': int(from_neuron),
                             'to_neuron': int(to_neuron),
                             'weight': float(weights[to_neuron, from_neuron]),
-                            'weight_abs': float(abs(weights[to_neuron, from_neuron]))
+                            'weight_abs': float(abs(weights[to_neuron, from_neuron])),
+                            'layer_index': i,
+                            'weight_index': [int(to_neuron), int(from_neuron)]
                         })
             
             # Sort output weights by absolute value
@@ -771,6 +775,89 @@ class DigitClassifier:
         except Exception as e:
             print(f"Error extracting model weights: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def update_weight(self, layer_index, weight_indices, new_value=None, increment=None):
+        """Update a specific weight in the model.
+        
+        Args:
+            layer_index: Index of the layer in the model.layers list
+            weight_indices: List/tuple with [to_neuron, from_neuron] indices
+            new_value: Directly set weight to this value if provided
+            increment: Add this value to the current weight if provided
+            
+        Returns:
+            Dictionary with success status and new weight value
+        """
+        try:
+            print(f"Updating weight: layer_index={layer_index}, weight_indices={weight_indices}, new_value={new_value}, increment={increment}")
+            
+            if layer_index < 0 or layer_index >= len(self.model.layers):
+                error_msg = f"Invalid layer index: {layer_index}, model has {len(self.model.layers)} layers"
+                print(error_msg)
+                return {'success': False, 'error': error_msg}
+                
+            layer = self.model.layers[layer_index]
+            
+            # Validate weight_indices format
+            if not isinstance(weight_indices, list) or len(weight_indices) != 2:
+                error_msg = f"Invalid weight_indices format: {weight_indices}, must be a list of two integers"
+                print(error_msg)
+                return {'success': False, 'error': error_msg}
+                
+            to_neuron, from_neuron = weight_indices
+            
+            # Print layer dimensions for debugging
+            print(f"Layer weight shape: {layer.weight.shape}")
+            
+            # Check if indices are valid
+            if to_neuron < 0 or to_neuron >= layer.weight.shape[0] or \
+               from_neuron < 0 or from_neuron >= layer.weight.shape[1]:
+                error_msg = f"Invalid weight indices: {weight_indices} for layer with shape {layer.weight.shape}"
+                print(error_msg)
+                return {'success': False, 'error': error_msg}
+            
+            # Get current weight
+            current_weight = float(layer.weight.data[to_neuron, from_neuron].item())
+            print(f"Current weight value: {current_weight}")
+            
+            # Determine new weight value
+            if new_value is not None:
+                weight_value = float(new_value)
+                print(f"Setting new weight value: {weight_value}")
+            elif increment is not None:
+                weight_value = current_weight + float(increment)
+                print(f"Incrementing weight by {increment} to: {weight_value}")
+            else:
+                error_msg = "Either new_value or increment must be provided"
+                print(error_msg)
+                return {'success': False, 'error': error_msg}
+            
+            # Update the weight
+            layer.weight.data[to_neuron, from_neuron] = torch.tensor(weight_value, device=self.device)
+            print(f"Weight updated to: {layer.weight.data[to_neuron, from_neuron].item()}")
+            
+            # Save the model with updated weights
+            self.save_model()
+            print("Model saved with updated weights")
+            
+            # Evaluate model with new weight
+            print("Evaluating model with new weights...")
+            evaluation = self.evaluate_model()
+            accuracy = evaluation['accuracy'] if evaluation['success'] else None
+            print(f"New model accuracy: {accuracy}")
+            
+            return {
+                'success': True, 
+                'new_weight': float(layer.weight.data[to_neuron, from_neuron].item()),
+                'accuracy': accuracy
+            }
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Error updating weight: {str(e)}"
+            print(error_msg)
+            print(traceback.format_exc())
+            return {'success': False, 'error': error_msg}
 
 # Initialize the classifier
 print("Initializing DigitClassifier...")

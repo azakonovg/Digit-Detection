@@ -468,6 +468,102 @@
             border: 1px solid #eee;
             border-radius: 5px;
         }
+        
+        /* Editable weight styles */
+        .weight-cell {
+            position: relative;
+            min-width: 150px;
+        }
+        
+        .weight-value {
+            font-weight: bold;
+            display: inline-block;
+            min-width: 70px;
+        }
+        
+        .weight-controls {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 5px;
+        }
+        
+        .weight-btn {
+            padding: 2px 6px;
+            margin: 0 2px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            background-color: #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        
+        .weight-btn:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .weight-btn.increase {
+            color: #2ecc71;
+        }
+        
+        .weight-btn.decrease {
+            color: #e74c3c;
+        }
+        
+        .weight-input {
+            width: 80px;
+            padding: 2px 4px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        
+        .weight-update-btn {
+            padding: 2px 5px;
+            font-size: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-left: 3px;
+        }
+        
+        .weight-update-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .weight-edit-mode {
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Status message for weight updates */
+        .weight-status {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .weight-status.success {
+            display: block;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .weight-status.error {
+            display: block;
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
     </style>
 </head>
 <body>
@@ -553,7 +649,13 @@
                 <label for="weightLimit">Max weights per layer:</label>
                 <input type="number" id="weightLimit" value="50" min="10" max="1000" step="10">
                 <button class="btn" onclick="loadModelWeights()">Refresh Weights</button>
+                <div style="margin-left: 20px;">
+                    <input type="checkbox" id="editableWeights" onchange="toggleEditableWeights()">
+                    <label for="editableWeights">Enable editable weights</label>
+                </div>
             </div>
+            
+            <div id="weightStatus" class="weight-status"></div>
             
             <div class="weights-container">
                 <table class="weights-table" id="weightsTable">
@@ -564,11 +666,12 @@
                             <th>To Layer</th>
                             <th>To Neuron</th>
                             <th>Weight Value</th>
+                            <th id="weightActionsHeader" style="display: none;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="weightsTableBody">
                         <tr>
-                            <td colspan="5">Loading weights data...</td>
+                            <td colspan="6">Loading weights data...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1306,14 +1409,14 @@
             
             container.appendChild(layerDiv);
         }
-        
+
         function removeLayer() {
             const container = document.getElementById('layerInputs');
             if (container.children.length > 1) {
                 container.removeChild(container.lastChild);
             }
         }
-        
+
         function updateArchitecture() {
             const layers = Array.from(document.getElementsByClassName('layer-size'))
                 .map(input => parseInt(input.value))
@@ -1383,9 +1486,14 @@
         function loadModelWeights() {
             const limit = document.getElementById('weightLimit').value || 50;
             const tableBody = document.getElementById('weightsTableBody');
+            const editableWeights = document.getElementById('editableWeights').checked;
+            const weightActionsHeader = document.getElementById('weightActionsHeader');
+            
+            // Update header visibility based on editable mode
+            weightActionsHeader.style.display = editableWeights ? 'table-cell' : 'none';
             
             // Show loading message
-            tableBody.innerHTML = '<tr><td colspan="5">Loading weights data...</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6">Loading weights data...</td></tr>';
             
             fetch(`/get_model_weights?limit=${limit}`)
                 .then(response => response.json())
@@ -1397,15 +1505,7 @@
                         if (data.output_layer_weights && data.output_layer_weights.length > 0) {
                             data.output_layer_weights.forEach(w => {
                                 const weightClass = w.weight >= 0 ? 'positive-weight' : 'negative-weight';
-                                html += `
-                                    <tr>
-                                        <td>${w.from_layer}</td>
-                                        <td>${w.from_neuron}</td>
-                                        <td>${w.to_layer}</td>
-                                        <td>${w.to_neuron}</td>
-                                        <td class="${weightClass}">${w.weight.toFixed(4)}</td>
-                                    </tr>
-                                `;
+                                html += generateWeightRow(w, weightClass, editableWeights);
                             });
                         }
                         
@@ -1413,25 +1513,17 @@
                         if (data.hidden_layer_weights && data.hidden_layer_weights.length > 0) {
                             data.hidden_layer_weights.forEach(w => {
                                 const weightClass = w.weight >= 0 ? 'positive-weight' : 'negative-weight';
-                                html += `
-                                    <tr>
-                                        <td>${w.from_layer}</td>
-                                        <td>${w.from_neuron}</td>
-                                        <td>${w.to_layer}</td>
-                                        <td>${w.to_neuron}</td>
-                                        <td class="${weightClass}">${w.weight.toFixed(4)}</td>
-                                    </tr>
-                                `;
+                                html += generateWeightRow(w, weightClass, editableWeights);
                             });
                         }
                         
                         if (html === '') {
-                            html = '<tr><td colspan="5">No weight data available</td></tr>';
+                            html = '<tr><td colspan="6">No weight data available</td></tr>';
                         } else {
                             // Add summary at the end
                             html += `
                                 <tr>
-                                    <td colspan="5" style="text-align: center; font-style: italic; background-color: #f8f9fa;">
+                                    <td colspan="6" style="text-align: center; font-style: italic; background-color: #f8f9fa;">
                                         Showing ${data.shown_weights} weights out of ${data.total_weights.toLocaleString()} total weights
                                     </td>
                                 </tr>
@@ -1439,14 +1531,191 @@
                         }
                         
                         tableBody.innerHTML = html;
+                        
+                        // Add event listeners to the weight control buttons
+                        if (editableWeights) {
+                            attachWeightControlListeners();
+                        }
                     } else {
-                        tableBody.innerHTML = `<tr><td colspan="5">Error loading weights: ${data.error || 'Unknown error'}</td></tr>`;
+                        tableBody.innerHTML = `<tr><td colspan="6">Error loading weights: ${data.error || 'Unknown error'}</td></tr>`;
                     }
                 })
                 .catch(error => {
                     console.error('Error loading model weights:', error);
-                    tableBody.innerHTML = `<tr><td colspan="5">Error loading weights: ${error.message}</td></tr>`;
+                    tableBody.innerHTML = `<tr><td colspan="6">Error loading weights: ${error.message}</td></tr>`;
                 });
+        }
+        
+        function generateWeightRow(weight, weightClass, editable) {
+            const weightIndicesJSON = JSON.stringify(weight.weight_index);
+            
+            const editableCell = editable ? 
+                `<td>
+                    <button class="weight-btn increase" data-layer="${weight.layer_index}" data-indices='${weightIndicesJSON}' data-increment="0.1">+0.1</button>
+                    <button class="weight-btn increase" data-layer="${weight.layer_index}" data-indices='${weightIndicesJSON}' data-increment="0.01">+0.01</button>
+                    <button class="weight-btn decrease" data-layer="${weight.layer_index}" data-indices='${weightIndicesJSON}' data-increment="-0.01">-0.01</button>
+                    <button class="weight-btn decrease" data-layer="${weight.layer_index}" data-indices='${weightIndicesJSON}' data-increment="-0.1">-0.1</button>
+                </td>` : '';
+                
+            return `
+                <tr data-layer="${weight.layer_index}" data-indices='${weightIndicesJSON}'>
+                    <td>${weight.from_layer}</td>
+                    <td>${weight.from_neuron}</td>
+                    <td>${weight.to_layer}</td>
+                    <td>${weight.to_neuron}</td>
+                    <td class="weight-cell ${weightClass}">
+                        <span class="weight-value" id="weight-${weight.layer_index}-${weight.weight_index[0]}-${weight.weight_index[1]}">${weight.weight.toFixed(4)}</span>
+                        ${editable ? 
+                          `<div class="weight-edit-mode">
+                             <input type="number" class="weight-input" step="0.01" value="${weight.weight.toFixed(4)}">
+                             <button class="weight-update-btn" data-layer="${weight.layer_index}" data-indices='${weightIndicesJSON}'>Set</button>
+                           </div>` : ''}
+                    </td>
+                    ${editable ? editableCell : ''}
+                </tr>
+            `;
+        }
+        
+        function attachWeightControlListeners() {
+            // Increment/decrement buttons
+            document.querySelectorAll('.weight-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const layerIndex = this.getAttribute('data-layer');
+                    const indicesStr = this.getAttribute('data-indices');
+                    const increment = parseFloat(this.getAttribute('data-increment'));
+                    
+                    // Parse the JSON string to get the weight indices
+                    const weightIndices = JSON.parse(indicesStr);
+                    
+                    updateWeight(layerIndex, weightIndices, null, increment);
+                });
+            });
+            
+            // Custom weight value buttons
+            document.querySelectorAll('.weight-update-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const layerIndex = this.getAttribute('data-layer');
+                    const indicesStr = this.getAttribute('data-indices');
+                    
+                    // Parse the JSON string to get the weight indices
+                    const weightIndices = JSON.parse(indicesStr);
+                    
+                    const inputElement = this.previousElementSibling;
+                    const newValue = parseFloat(inputElement.value);
+                    
+                    if (!isNaN(newValue)) {
+                        updateWeight(layerIndex, weightIndices, newValue);
+                    }
+                });
+            });
+        }
+        
+        function updateWeight(layerIndex, weightIndices, newValue = null, increment = null) {
+            // Disable all weight control buttons during update
+            document.querySelectorAll('.weight-btn, .weight-update-btn').forEach(btn => {
+                btn.disabled = true;
+            });
+            
+            // Show updating status
+            const statusElement = document.getElementById('weightStatus');
+            statusElement.className = 'weight-status';
+            statusElement.textContent = 'Updating weight and recalculating model accuracy...';
+            
+            // Ensure layerIndex and weightIndices are valid
+            if (!layerIndex || !weightIndices || !Array.isArray(weightIndices) || weightIndices.length !== 2) {
+                statusElement.className = 'weight-status error';
+                statusElement.textContent = 'Error: Invalid weight indices';
+                
+                // Re-enable buttons
+                document.querySelectorAll('.weight-btn, .weight-update-btn').forEach(btn => {
+                    btn.disabled = false;
+                });
+                return;
+            }
+            
+            console.log('Updating weight:', {
+                layer_index: layerIndex,
+                weight_indices: weightIndices,
+                new_value: newValue,
+                increment: increment
+            });
+            
+            // Prepare request data
+            const requestData = {
+                layer_index: parseInt(layerIndex),
+                weight_indices: weightIndices
+            };
+            
+            if (newValue !== null) {
+                requestData.new_value = newValue;
+            } else if (increment !== null) {
+                requestData.increment = increment;
+            }
+            
+            // Send update request
+            fetch('/update_weight', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Update the weight display
+                    const weightId = `weight-${layerIndex}-${weightIndices[0]}-${weightIndices[1]}`;
+                    const weightElement = document.getElementById(weightId);
+                    if (weightElement) {
+                        weightElement.textContent = data.new_weight.toFixed(4);
+                        weightElement.className = data.new_weight >= 0 ? 'weight-value positive-weight' : 'weight-value negative-weight';
+                    }
+                    
+                    // Update accuracy display
+                    const accuracyDisplay = document.getElementById('modelAccuracy');
+                    if (accuracyDisplay && data.accuracy) {
+                        accuracyDisplay.textContent = `Model Accuracy: ${data.accuracy.toFixed(2)}%`;
+                    }
+                    
+                    // Show success message
+                    statusElement.className = 'weight-status success';
+                    statusElement.textContent = `Weight updated successfully! New value: ${data.new_weight.toFixed(4)}, Accuracy: ${data.accuracy ? data.accuracy.toFixed(2) + '%' : 'calculating...'}`;
+                    
+                    // Update neuron colors to reflect changes
+                    loadNetworkInfo();
+                } else {
+                    // Show error message
+                    statusElement.className = 'weight-status error';
+                    statusElement.textContent = `Error updating weight: ${data.error || 'Unknown error'}`;
+                }
+            })
+            .catch(error => {
+                console.error('Error updating weight:', error);
+                statusElement.className = 'weight-status error';
+                statusElement.textContent = `Error: ${error.message}`;
+            })
+            .finally(() => {
+                // Re-enable all weight control buttons
+                document.querySelectorAll('.weight-btn, .weight-update-btn').forEach(btn => {
+                    btn.disabled = false;
+                });
+            });
+        }
+        
+        function toggleEditableWeights() {
+            const editableWeights = document.getElementById('editableWeights').checked;
+            const weightActionsHeader = document.getElementById('weightActionsHeader');
+            
+            // Update header visibility
+            weightActionsHeader.style.display = editableWeights ? 'table-cell' : 'none';
+            
+            // Reload weights table to apply editable state
+            loadModelWeights();
         }
         
         // Load weights when the page loads
