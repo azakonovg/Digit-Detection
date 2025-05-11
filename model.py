@@ -675,6 +675,102 @@ class DigitClassifier:
         except Exception as e:
             print(f"Error getting dataset info: {str(e)}")
             return {'success': False, 'error': str(e)}
+    
+    def get_model_weights(self, limit=100):
+        """Extract model weights for visualization.
+        
+        Args:
+            limit: Maximum number of weights to return per layer connection
+            
+        Returns:
+            Dictionary with weight information
+        """
+        try:
+            self.model.eval()
+            
+            # Prepare results structure
+            result = {
+                'success': True,
+                'output_layer_weights': [],  # Weights to output neurons (prioritized)
+                'hidden_layer_weights': [],  # Weights between other layers
+                'total_weights': 0,
+                'shown_weights': 0
+            }
+            
+            total_weights = 0
+            shown_weights = 0
+            
+            # Process each layer
+            layer_names = ['Input'] + [f'Hidden {i+1}' for i in range(len(self.hidden_sizes))] + ['Output']
+            
+            for i, layer in enumerate(self.model.layers):
+                weights = layer.weight.data.cpu().numpy()
+                from_layer_name = layer_names[i]
+                to_layer_name = layer_names[i+1]
+                
+                total_weights += weights.size
+                
+                # Flatten the weights and get indices
+                flat_weights = weights.flatten()
+                indices = np.argsort(np.abs(flat_weights))[::-1]  # Sort by absolute value, descending
+                
+                # Take only the top weights
+                if len(indices) > limit:
+                    indices = indices[:limit]
+                
+                shown_weights += len(indices)
+                
+                # Add prioritized weights (to output layer)
+                if i == len(self.model.layers) - 1:  # If this is the last layer (connecting to output)
+                    for idx in indices:
+                        # Convert flat index to 2D indices
+                        to_neuron = idx % weights.shape[0]
+                        from_neuron = idx // weights.shape[0]
+                        
+                        result['output_layer_weights'].append({
+                            'from_layer': from_layer_name,
+                            'to_layer': to_layer_name,
+                            'from_neuron': int(from_neuron),
+                            'to_neuron': int(to_neuron),
+                            'weight': float(weights[to_neuron, from_neuron]),
+                            'weight_abs': float(abs(weights[to_neuron, from_neuron]))
+                        })
+                else:
+                    for idx in indices:
+                        # Convert flat index to 2D indices
+                        to_neuron = idx % weights.shape[0]
+                        from_neuron = idx // weights.shape[0]
+                        
+                        result['hidden_layer_weights'].append({
+                            'from_layer': from_layer_name,
+                            'to_layer': to_layer_name,
+                            'from_neuron': int(from_neuron),
+                            'to_neuron': int(to_neuron),
+                            'weight': float(weights[to_neuron, from_neuron]),
+                            'weight_abs': float(abs(weights[to_neuron, from_neuron]))
+                        })
+            
+            # Sort output weights by absolute value
+            result['output_layer_weights'] = sorted(
+                result['output_layer_weights'], 
+                key=lambda x: x['weight_abs'], 
+                reverse=True
+            )
+            
+            # Sort hidden weights by absolute value
+            result['hidden_layer_weights'] = sorted(
+                result['hidden_layer_weights'], 
+                key=lambda x: x['weight_abs'], 
+                reverse=True
+            )
+            
+            result['total_weights'] = int(total_weights)
+            result['shown_weights'] = int(shown_weights)
+            
+            return result
+        except Exception as e:
+            print(f"Error extracting model weights: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
 # Initialize the classifier
 print("Initializing DigitClassifier...")

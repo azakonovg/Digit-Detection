@@ -40,4 +40,4 @@ instance/
 .webassets-cache
 
 # Logs
-*.log 
+*.log .DS_Store

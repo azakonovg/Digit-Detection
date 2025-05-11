@@ -240,6 +240,17 @@ def get_network_info():
     """Get information about the neural network architecture."""
     return jsonify(classifier.get_network_info())
 
+@app.route('/get_model_weights')
+def get_model_weights():
+    """Get model weights for visualization."""
+    try:
+        # Optionally limit the number of weights per layer
+        limit = request.args.get('limit', default=100, type=int)
+        return jsonify(classifier.get_model_weights(limit=limit))
+    except Exception as e:
+        print(f"Error in get_model_weights route: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/update_hidden_size', methods=['POST'])
 def update_hidden_size():
     try:

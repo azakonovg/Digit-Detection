@@ -409,6 +409,65 @@
             z-index: 1;
             pointer-events: none;
         }
+        
+        /* Weights table styles */
+        .weights-table-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .weights-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .weights-table th, .weights-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        
+        .weights-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        
+        .weights-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .weights-table tr:hover {
+            background-color: #f1f1f1;
+        }
+        
+        .positive-weight {
+            color: #2ecc71;
+        }
+        
+        .negative-weight {
+            color: #e74c3c;
+        }
+        
+        .weights-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .weights-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -485,243 +544,278 @@
             </div>
         </div>
         
-        <script>
-        function loadNetworkInfo() {
-            fetch('/get_network_info')
-                .then(response => response.json())
-                .then(data => {
-                    const container = document.getElementById('networkInfo');
-                    const hiddenLayers = data.layers.filter(layer => layer.name.includes('Hidden Layer'));
-                    
-                    let html = `
-                        <div class="network-visualization">
-                            <!-- SVG container for connections -->
-                            <svg class="connections" width="100%" height="100%">
-                                <defs>
-                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
-                                    refX="9" refY="3.5" orient="auto">
-                                        <polygon points="0 0, 10 3.5, 0 7" fill="#95a5a6"/>
-                                    </marker>
-                                </defs>
-                            </svg>
-                            <!-- Input Layer -->
-                            <div class="layer-column">
-                                <div class="layer-title">Input Layer<br>28×28 pixels</div>
-                                <div class="neurons">
-                                    <div class="neuron"></div>
-                                    <div class="neuron"></div>
-                                    <div class="neuron-group">780</div>
-                                    <div class="neuron"></div>
-                                    <div class="neuron"></div>
-                                </div>
-                                <div class="layer-info">
-                                    784 input neurons<br>
-                                    (one per pixel)<br>
-                                    Flattened 28×28 image
-                                </div>
-                            </div>`;
+        <!-- Weights Table Section -->
+        <div class="weights-table-section">
+            <h2>Model Weights</h2>
+            <p>This table shows the strongest connections between neurons in the network. Positive weights are shown in green, negative weights in red.</p>
+            
+            <div class="weights-controls">
+                <label for="weightLimit">Max weights per layer:</label>
+                <input type="number" id="weightLimit" value="50" min="10" max="1000" step="10">
+                <button class="btn" onclick="loadModelWeights()">Refresh Weights</button>
+            </div>
+            
+            <div class="weights-container">
+                <table class="weights-table" id="weightsTable">
+                    <thead>
+                        <tr>
+                            <th>From Layer</th>
+                            <th>From Neuron</th>
+                            <th>To Layer</th>
+                            <th>To Neuron</th>
+                            <th>Weight Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weightsTableBody">
+                        <tr>
+                            <td colspan="5">Loading weights data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function loadNetworkInfo() {
+        // Show loading indicator
+        const container = document.getElementById('networkInfo');
+        container.innerHTML = '<div style="text-align: center; padding: 20px;">Loading network visualization...</div>';
+        
+        fetch('/get_network_info')
+            .then(response => response.json())
+            .then(data => {
+                const hiddenLayers = data.layers.filter(layer => layer.name.includes('Hidden Layer'));
+                
+                let html = `
+                    <div class="network-visualization">
+                        <!-- SVG container for connections -->
+                        <svg class="connections" width="100%" height="100%">
+                            <defs>
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                                refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#95a5a6"/>
+                                </marker>
+                            </defs>
+                        </svg>
+                        <!-- Input Layer -->
+                        <div class="layer-column">
+                            <div class="layer-title">Input Layer<br>28×28 pixels</div>
+                            <div class="neurons">
+                                <div class="neuron"></div>
+                                <div class="neuron"></div>
+                                <div class="neuron-group">780</div>
+                                <div class="neuron"></div>
+                                <div class="neuron"></div>
+                            </div>
+                            <div class="layer-info">
+                                784 input neurons<br>
+                                (one per pixel)<br>
+                                Flattened 28×28 image
+                            </div>
+                        </div>`;
+                        
+                        // Add hidden layers
+                        hiddenLayers.forEach((layer, index) => {
+                            const neurons = parseInt(layer.output_shape);
+                            const displayNeurons = neurons <= 5 ? neurons : 5;
+                            const remainingNeurons = neurons - displayNeurons;
                             
-                            // Add hidden layers
-                            hiddenLayers.forEach((layer, index) => {
-                                const neurons = parseInt(layer.output_shape);
-                                const displayNeurons = neurons <= 5 ? neurons : 5;
-                                const remainingNeurons = neurons - displayNeurons;
-                                
-                                html += `
-                                    <div class="layer-column">
-                                        <div class="layer-title">Hidden Layer ${index + 1}</div>
-                                        <div class="neurons" style="min-height: ${Math.min(neurons * 5, 300)}px">`;
-                                
-                                // Add visible neurons
-                                for (let i = 0; i < Math.min(2, displayNeurons); i++) {
-                                    html += `<div class="neuron"></div>`;
-                                }
-                                
-                                // Add neuron group if there are remaining neurons
-                                if (remainingNeurons > 0) {
-                                    html += `<div class="neuron-group">+${remainingNeurons}</div>`;
-                                }
-                                
-                                // Add remaining visible neurons
-                                for (let i = Math.max(0, displayNeurons - 2); i < displayNeurons; i++) {
-                                    html += `<div class="neuron"></div>`;
-                                }
-                                
-                                html += `
-                                        </div>
-                                        <div class="layer-info">
-                                            ${neurons} neurons<br>
-                                            ReLU activation<br>
-                                            ${layer.parameters.toLocaleString()} parameters<br>
-                                            <span style="font-size: 10px; color: #888;">
-                                                (${layer.weights.toLocaleString()} weights + ${layer.biases.toLocaleString()} biases)
-                                            </span>
-                                        </div>
-                                    </div>`;
-                            });
-                            
-                            // Add output layer
                             html += `
-                                    <div class="layer-column">
-                                        <div class="layer-title">Output Layer</div>
-                                        <div class="neurons">
-                                            <div class="neuron output-neuron" data-digit="0"><span class="neuron-label">0</span></div>
-                                            <div class="neuron output-neuron" data-digit="1"><span class="neuron-label">1</span></div>
-                                            <div class="neuron output-neuron" data-digit="2"><span class="neuron-label">2</span></div>
-                                            <div class="neuron output-neuron" data-digit="3"><span class="neuron-label">3</span></div>
-                                            <div class="neuron output-neuron" data-digit="4"><span class="neuron-label">4</span></div>
-                                            <div class="neuron output-neuron" data-digit="5"><span class="neuron-label">5</span></div>
-                                            <div class="neuron output-neuron" data-digit="6"><span class="neuron-label">6</span></div>
-                                            <div class="neuron output-neuron" data-digit="7"><span class="neuron-label">7</span></div>
-                                            <div class="neuron output-neuron" data-digit="8"><span class="neuron-label">8</span></div>
-                                            <div class="neuron output-neuron" data-digit="9"><span class="neuron-label">9</span></div>
-                                        </div>
-                                        <div class="layer-info">
-                                            10 output neurons<br>
-                                            Softmax activation<br>
-                                            ${data.layers[data.layers.length-1].parameters.toLocaleString()} parameters<br>
-                                            <span style="font-size: 10px; color: #888;">
-                                                (${data.layers[data.layers.length-1].weights.toLocaleString()} weights + 
-                                                ${data.layers[data.layers.length-1].biases.toLocaleString()} biases)
-                                            </span>
-                                        </div>
+                                <div class="layer-column">
+                                    <div class="layer-title">Hidden Layer ${index + 1}</div>
+                                    <div class="neurons" style="min-height: ${Math.min(neurons * 5, 300)}px">`;
+                                    
+                                    // Add visible neurons
+                                    for (let i = 0; i < Math.min(2, displayNeurons); i++) {
+                                        html += `<div class="neuron"></div>`;
+                                    }
+                                    
+                                    // Add neuron group if there are remaining neurons
+                                    if (remainingNeurons > 0) {
+                                        html += `<div class="neuron-group">+${remainingNeurons}</div>`;
+                                    }
+                                    
+                                    // Add remaining visible neurons
+                                    for (let i = Math.max(0, displayNeurons - 2); i < displayNeurons; i++) {
+                                        html += `<div class="neuron"></div>`;
+                                    }
+                                    
+                                    html += `
+                                    </div>
+                                    <div class="layer-info">
+                                        ${neurons} neurons<br>
+                                        ReLU activation<br>
+                                        ${layer.parameters.toLocaleString()} parameters<br>
+                                        <span style="font-size: 10px; color: #888;">
+                                            (${layer.weights.toLocaleString()} weights + ${layer.biases.toLocaleString()} biases)
+                                        </span>
+                                    </div>
+                                </div>`;
+                        });
+                        
+                        // Add output layer
+                        html += `
+                                <div class="layer-column">
+                                    <div class="layer-title">Output Layer</div>
+                                    <div class="neurons">
+                                        <div class="neuron output-neuron" data-digit="0"><span class="neuron-label">0</span></div>
+                                        <div class="neuron output-neuron" data-digit="1"><span class="neuron-label">1</span></div>
+                                        <div class="neuron output-neuron" data-digit="2"><span class="neuron-label">2</span></div>
+                                        <div class="neuron output-neuron" data-digit="3"><span class="neuron-label">3</span></div>
+                                        <div class="neuron output-neuron" data-digit="4"><span class="neuron-label">4</span></div>
+                                        <div class="neuron output-neuron" data-digit="5"><span class="neuron-label">5</span></div>
+                                        <div class="neuron output-neuron" data-digit="6"><span class="neuron-label">6</span></div>
+                                        <div class="neuron output-neuron" data-digit="7"><span class="neuron-label">7</span></div>
+                                        <div class="neuron output-neuron" data-digit="8"><span class="neuron-label">8</span></div>
+                                        <div class="neuron output-neuron" data-digit="9"><span class="neuron-label">9</span></div>
+                                    </div>
+                                    <div class="layer-info">
+                                        10 output neurons<br>
+                                        Softmax activation<br>
+                                        ${data.layers[data.layers.length-1].parameters.toLocaleString()} parameters<br>
+                                        <span style="font-size: 10px; color: #888;">
+                                            (${data.layers[data.layers.length-1].weights.toLocaleString()} weights + 
+                                            ${data.layers[data.layers.length-1].biases.toLocaleString()} biases)
+                                        </span>
                                     </div>
                                 </div>
-                                <div class="total-params">Total Learnable Parameters: ${data.total_parameters.toLocaleString()}</div>
-                                <div class="weight-explanation" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
-                                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Neural Network Weights</h4>
-                                    <p style="color: #666; line-height: 1.5;">
-                                        Lines show connections between neurons. Thicker lines mean stronger connections.
-                                        During training, these connections automatically adjust to recognize digits better.
-                                    </p>
-                                </div>
-                                <p style="margin-top: 15px; color: #666;">
-                                    Each neuron processes its inputs and passes results to the next layer. 
-                                    ReLU activation helps learn patterns, and the final layer predicts the digit (0-9).
-                                </p>`;
-                            
-                            container.innerHTML = html;
-                            
-                            // Add connection lines after the elements are added to the DOM
-                            setTimeout(drawConnections, 100);
-                        })
-                        .catch(error => {
-                            console.error('Error loading network info:', error);
-                        });
+                            </div>
+                            <div class="total-params">Total Learnable Parameters: ${data.total_parameters.toLocaleString()}</div>
+                            <div class="weight-explanation" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                                <h4 style="color: #2c3e50; margin-bottom: 10px;">Neural Network Weights</h4>
+                                <p style="color: #666; line-height: 1.5;">
+                                    Lines show connections between neurons. Thicker lines mean stronger connections.
+                                    During training, these connections automatically adjust to recognize digits better.
+                                </p>
+                            </div>
+                            <p style="margin-top: 15px; color: #666;">
+                                Each neuron processes its inputs and passes results to the next layer. 
+                                ReLU activation helps learn patterns, and the final layer predicts the digit (0-9).
+                            </p>`;
+                        
+                        container.innerHTML = html;
+                        
+                        // Add connection lines after the elements are added to the DOM
+                        setTimeout(drawConnections, 100);
+            })
+            .catch(error => {
+                console.error('Error loading network info:', error);
+            });
+    }
+    
+    function drawConnections() {
+        const svg = document.querySelector('.connections');
+        if (!svg) return;
+        
+        const layers = document.querySelectorAll('.layer-column');
+        
+        // Clear existing lines
+        while (svg.lastChild) {
+            if (svg.lastChild.tagName === 'defs') break;
+            svg.removeChild(svg.lastChild);
         }
         
-        function drawConnections() {
-            const svg = document.querySelector('.connections');
-            if (!svg) return;
+        // Generate some example weights for visualization
+        const exampleWeights = [
+            { from: 0, to: 0, weight: 0.8 },
+            { from: 0, to: 1, weight: 0.3 },
+            { from: 1, to: 0, weight: 0.6 },
+            { from: 1, to: 1, weight: 0.1 },
+        ];
+        
+        // Draw connections between layers
+        for (let i = 0; i < layers.length - 1; i++) {
+            const currentLayer = layers[i];
+            const nextLayer = layers[i + 1];
+            const currentNeurons = currentLayer.querySelectorAll('.neuron, .neuron-group');
+            const nextNeurons = nextLayer.querySelectorAll('.neuron, .neuron-group');
             
-            const layers = document.querySelectorAll('.layer-column');
-            
-            // Clear existing lines
-            while (svg.lastChild) {
-                if (svg.lastChild.tagName === 'defs') break;
-                svg.removeChild(svg.lastChild);
-            }
-            
-            // Generate some example weights for visualization
-            const exampleWeights = [
-                { from: 0, to: 0, weight: 0.8 },
-                { from: 0, to: 1, weight: 0.3 },
-                { from: 1, to: 0, weight: 0.6 },
-                { from: 1, to: 1, weight: 0.1 },
-            ];
-            
-            // Draw connections between layers
-            for (let i = 0; i < layers.length - 1; i++) {
-                const currentLayer = layers[i];
-                const nextLayer = layers[i + 1];
-                const currentNeurons = currentLayer.querySelectorAll('.neuron, .neuron-group');
-                const nextNeurons = nextLayer.querySelectorAll('.neuron, .neuron-group');
+            currentNeurons.forEach((fromNeuron, fromIndex) => {
+                const fromRect = fromNeuron.getBoundingClientRect();
+                const fromX = fromRect.right - svg.getBoundingClientRect().left;
+                const fromY = fromRect.top - svg.getBoundingClientRect().top + fromRect.height / 2;
                 
-                currentNeurons.forEach((fromNeuron, fromIndex) => {
-                    const fromRect = fromNeuron.getBoundingClientRect();
-                    const fromX = fromRect.right - svg.getBoundingClientRect().left;
-                    const fromY = fromRect.top - svg.getBoundingClientRect().top + fromRect.height / 2;
-                    
-                    nextNeurons.forEach((toNeuron, toIndex) => {
-                        // Skip some connections for visual clarity
-                        if ((fromIndex + toIndex) % 2 === 0) {
-                            const toRect = toNeuron.getBoundingClientRect();
-                            const toX = toRect.left - svg.getBoundingClientRect().left;
-                            const toY = toRect.top - svg.getBoundingClientRect().top + toRect.height / 2;
+                nextNeurons.forEach((toNeuron, toIndex) => {
+                    // Skip some connections for visual clarity
+                    if ((fromIndex + toIndex) % 2 === 0) {
+                        const toRect = toNeuron.getBoundingClientRect();
+                        const toX = toRect.left - svg.getBoundingClientRect().left;
+                        const toY = toRect.top - svg.getBoundingClientRect().top + toRect.height / 2;
+                        
+                        // Find if this is one of our example connections
+                        const exampleWeight = exampleWeights.find(w => 
+                            i === 0 && w.from === fromIndex && w.to === toIndex
+                        );
+                        
+                        // Use example weight or random weight
+                        const weight = exampleWeight ? exampleWeight.weight : Math.random() * 0.3 + 0.1;
+                        
+                        // Calculate line properties based on weight
+                        const strokeWidth = Math.max(1, weight * 10);  // Reduced from 20 to 10 for thinner lines
+                        const opacity = Math.max(0.2, weight);  // Slightly reduced minimum opacity
+                        
+                        // Create background line (shadow effect)
+                        const shadowLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        const controlPoint1X = fromX + (toX - fromX) * 0.4;
+                        const controlPoint2X = fromX + (toX - fromX) * 0.6;
+                        
+                        shadowLine.setAttribute('d', `M ${fromX} ${fromY} C ${controlPoint1X} ${fromY}, ${controlPoint2X} ${toY}, ${toX} ${toY}`);
+                        shadowLine.setAttribute('stroke', '#e0e0e0');
+                        shadowLine.setAttribute('stroke-width', strokeWidth + 2);
+                        shadowLine.setAttribute('fill', 'none');
+                        shadowLine.setAttribute('opacity', 0.5);
+                        svg.appendChild(shadowLine);
+                        
+                        // Create main connection line
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        line.setAttribute('d', shadowLine.getAttribute('d'));
+                        line.setAttribute('stroke', '#2c3e50');
+                        line.setAttribute('stroke-width', strokeWidth);
+                        line.setAttribute('fill', 'none');
+                        line.setAttribute('opacity', opacity);
+                        svg.appendChild(line);
+                        
+                        // Add weight label for example connections
+                        if (exampleWeight) {
+                            const pathLength = line.getTotalLength();
+                            const midPoint = line.getPointAtLength(pathLength / 2);
                             
-                            // Find if this is one of our example connections
-                            const exampleWeight = exampleWeights.find(w => 
-                                i === 0 && w.from === fromIndex && w.to === toIndex
-                            );
+                            // Create label background
+                            const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                            labelBg.setAttribute('x', midPoint.x - 20);
+                            labelBg.setAttribute('y', midPoint.y - 12);
+                            labelBg.setAttribute('width', 40);
+                            labelBg.setAttribute('height', 20);
+                            labelBg.setAttribute('fill', 'white');
+                            labelBg.setAttribute('rx', 5);
+                            svg.appendChild(labelBg);
                             
-                            // Use example weight or random weight
-                            const weight = exampleWeight ? exampleWeight.weight : Math.random() * 0.3 + 0.1;
-                            
-                            // Calculate line properties based on weight
-                            const strokeWidth = Math.max(1, weight * 10);  // Reduced from 20 to 10 for thinner lines
-                            const opacity = Math.max(0.2, weight);  // Slightly reduced minimum opacity
-                            
-                            // Create background line (shadow effect)
-                            const shadowLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                            const controlPoint1X = fromX + (toX - fromX) * 0.4;
-                            const controlPoint2X = fromX + (toX - fromX) * 0.6;
-                            
-                            shadowLine.setAttribute('d', `M ${fromX} ${fromY} C ${controlPoint1X} ${fromY}, ${controlPoint2X} ${toY}, ${toX} ${toY}`);
-                            shadowLine.setAttribute('stroke', '#e0e0e0');
-                            shadowLine.setAttribute('stroke-width', strokeWidth + 2);
-                            shadowLine.setAttribute('fill', 'none');
-                            shadowLine.setAttribute('opacity', 0.5);
-                            svg.appendChild(shadowLine);
-                            
-                            // Create main connection line
-                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                            line.setAttribute('d', shadowLine.getAttribute('d'));
-                            line.setAttribute('stroke', '#2c3e50');
-                            line.setAttribute('stroke-width', strokeWidth);
-                            line.setAttribute('fill', 'none');
-                            line.setAttribute('opacity', opacity);
-                            svg.appendChild(line);
-                            
-                            // Add weight label for example connections
-                            if (exampleWeight) {
-                                const pathLength = line.getTotalLength();
-                                const midPoint = line.getPointAtLength(pathLength / 2);
-                                
-                                // Create label background
-                                const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                                labelBg.setAttribute('x', midPoint.x - 20);
-                                labelBg.setAttribute('y', midPoint.y - 12);
-                                labelBg.setAttribute('width', 40);
-                                labelBg.setAttribute('height', 20);
-                                labelBg.setAttribute('fill', 'white');
-                                labelBg.setAttribute('rx', 5);
-                                svg.appendChild(labelBg);
-                                
-                                // Create weight label
-                                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                                label.setAttribute('x', midPoint.x);
-                                label.setAttribute('y', midPoint.y + 5);
-                                label.setAttribute('text-anchor', 'middle');
-                                label.setAttribute('fill', '#2c3e50');
-                                label.setAttribute('font-size', '12px');
-                                label.setAttribute('font-weight', 'bold');
-                                label.textContent = weight.toFixed(1);
-                                svg.appendChild(label);
-                            }
+                            // Create weight label
+                            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                            label.setAttribute('x', midPoint.x);
+                            label.setAttribute('y', midPoint.y + 5);
+                            label.setAttribute('text-anchor', 'middle');
+                            label.setAttribute('fill', '#2c3e50');
+                            label.setAttribute('font-size', '12px');
+                            label.setAttribute('font-weight', 'bold');
+                            label.textContent = weight.toFixed(1);
+                            svg.appendChild(label);
                         }
-                    });
+                    }
                 });
-            }
+            });
         }
+    }
 
-        // Add window resize handler to redraw connections
-        window.addEventListener('resize', drawConnections);
+    // Add window resize handler to redraw connections
+    window.addEventListener('resize', drawConnections);
 
-        // Call this function when the page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            loadNetworkInfo();
-            loadMNISTSamples();
-        });
+    // Call this function when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadNetworkInfo();
+        loadMNISTSamples();
+    });
     </script>
 
     <script>
@@ -828,6 +922,10 @@
                     // Update neuron colors if probabilities are provided
                     if (data.probabilities) {
                         updateNeuronColors(data.probabilities);
+                        
+                        // Optionally refresh weights table 
+                        // to show weights for the predicted digit
+                        loadModelWeights();
                     } else {
                         // If no probabilities provided, highlight only the predicted digit
                         const singlePrediction = {};
@@ -854,6 +952,18 @@
                 neuron.style.transform = 'scale(1)';
             });
             
+            // Find the highest probability
+            let highestProb = 0;
+            let predictedDigit = null;
+            
+            for (const digit in probabilities) {
+                const probability = probabilities[digit];
+                if (probability > highestProb) {
+                    highestProb = probability;
+                    predictedDigit = digit;
+                }
+            }
+            
             // Update colors based on probabilities
             for (const digit in probabilities) {
                 const probability = probabilities[digit];
@@ -874,6 +984,35 @@
                     neuron.title = `Probability: ${(probability * 100).toFixed(2)}%`;
                 }
             }
+            
+            // If we have a prediction, highlight relevant weights in the table
+            if (predictedDigit !== null) {
+                highlightWeightsForDigit(predictedDigit);
+            }
+        }
+        
+        // Function to highlight weights for a specific digit
+        function highlightWeightsForDigit(digit) {
+            const rows = document.querySelectorAll('#weightsTableBody tr');
+            
+            // Reset all rows
+            rows.forEach(row => {
+                row.style.backgroundColor = '';
+                row.style.fontWeight = 'normal';
+            });
+            
+            // Highlight rows connecting to the specified digit
+            rows.forEach(row => {
+                const toLayerCell = row.cells[2];
+                const toNeuronCell = row.cells[3];
+                
+                if (toLayerCell && toNeuronCell && 
+                    toLayerCell.textContent.trim() === 'Output' && 
+                    toNeuronCell.textContent.trim() === digit) {
+                    row.style.backgroundColor = '#e8f8f5';
+                    row.style.fontWeight = 'bold';
+                }
+            });
         }
 
         function startTraining() {
@@ -910,9 +1049,13 @@
                     eventSource.close();
                     trainButton.disabled = false;
                     
-                    // Add a small delay before getting accuracy
+                    // Add a small delay before getting accuracy and refreshing visualizations
                     setTimeout(() => {
                         getModelAccuracy();
+                        // Refresh weights
+                        loadModelWeights();
+                        // Refresh network visualization
+                        loadNetworkInfo();
                     }, 1000);
                     return;
                 }
@@ -987,6 +1130,12 @@
                     }
                     // Clear any existing results since they're no longer valid
                     document.getElementById('resultContainer').innerHTML = '';
+                    
+                    // Reload network visualization to show reset weights
+                    loadNetworkInfo();
+                    
+                    // Reload weights table
+                    loadModelWeights();
                 } else {
                     statusText.textContent = `Error: ${data.error}`;
                 }
@@ -1014,6 +1163,9 @@
                 .then(data => {
                     if (data.success) {
                         accuracyDisplay.textContent = `Model Accuracy: ${data.accuracy.toFixed(2)}%`;
+                        
+                        // Refresh weights after getting accuracy
+                        loadModelWeights();
                     } else {
                         accuracyDisplay.textContent = `Error getting accuracy: ${data.error}`;
                     }
@@ -1193,11 +1345,16 @@
             .then(data => {
                 if (data.success) {
                     statusText.textContent = `Network architecture updated successfully with layers: ${layers.join(', ')}`;
+                    
                     // Reload network visualization
                     loadNetworkInfo();
+                    
                     // Reset model accuracy display
                     const accuracyDisplay = document.getElementById('modelAccuracy');
                     if (accuracyDisplay) accuracyDisplay.textContent = 'Model architecture changed. Please train the model.';
+                    
+                    // Reload weights table
+                    loadModelWeights();
                 } else {
                     const errorMessage = data.error || 'Unknown error occurred';
                     statusText.textContent = `Error: ${errorMessage}`;
@@ -1219,6 +1376,83 @@
             initLayerControls();
             loadNetworkInfo();
             loadMNISTSamples();
+        });
+    </script>
+
+    <script>
+        function loadModelWeights() {
+            const limit = document.getElementById('weightLimit').value || 50;
+            const tableBody = document.getElementById('weightsTableBody');
+            
+            // Show loading message
+            tableBody.innerHTML = '<tr><td colspan="5">Loading weights data...</td></tr>';
+            
+            fetch(`/get_model_weights?limit=${limit}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let html = '';
+                        
+                        // Add weights to output neurons first
+                        if (data.output_layer_weights && data.output_layer_weights.length > 0) {
+                            data.output_layer_weights.forEach(w => {
+                                const weightClass = w.weight >= 0 ? 'positive-weight' : 'negative-weight';
+                                html += `
+                                    <tr>
+                                        <td>${w.from_layer}</td>
+                                        <td>${w.from_neuron}</td>
+                                        <td>${w.to_layer}</td>
+                                        <td>${w.to_neuron}</td>
+                                        <td class="${weightClass}">${w.weight.toFixed(4)}</td>
+                                    </tr>
+                                `;
+                            });
+                        }
+                        
+                        // Add weights between hidden layers
+                        if (data.hidden_layer_weights && data.hidden_layer_weights.length > 0) {
+                            data.hidden_layer_weights.forEach(w => {
+                                const weightClass = w.weight >= 0 ? 'positive-weight' : 'negative-weight';
+                                html += `
+                                    <tr>
+                                        <td>${w.from_layer}</td>
+                                        <td>${w.from_neuron}</td>
+                                        <td>${w.to_layer}</td>
+                                        <td>${w.to_neuron}</td>
+                                        <td class="${weightClass}">${w.weight.toFixed(4)}</td>
+                                    </tr>
+                                `;
+                            });
+                        }
+                        
+                        if (html === '') {
+                            html = '<tr><td colspan="5">No weight data available</td></tr>';
+                        } else {
+                            // Add summary at the end
+                            html += `
+                                <tr>
+                                    <td colspan="5" style="text-align: center; font-style: italic; background-color: #f8f9fa;">
+                                        Showing ${data.shown_weights} weights out of ${data.total_weights.toLocaleString()} total weights
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                        
+                        tableBody.innerHTML = html;
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="5">Error loading weights: ${data.error || 'Unknown error'}</td></tr>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading model weights:', error);
+                    tableBody.innerHTML = `<tr><td colspan="5">Error loading weights: ${error.message}</td></tr>`;
+                });
+        }
+        
+        // Load weights when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add to existing listeners
+            loadModelWeights();
         });
     </script>
 </body>
