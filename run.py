@@ -115,12 +115,13 @@ def home():
                 
                 # Make prediction
                 image_tensor = process_image_for_prediction(image_path)
-                prediction = classifier.predict(image_tensor)
+                prediction_result = classifier.predict(image_tensor, get_probabilities=True)
                 
                 return jsonify({
                     'success': True, 
                     'image_path': image_path,
-                    'prediction': prediction
+                    'prediction': prediction_result['prediction'],
+                    'probabilities': prediction_result['probabilities']
                 })
             
             return jsonify({'success': False, 'error': 'No image data provided'})

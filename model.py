@@ -620,13 +620,24 @@ class DigitClassifier:
             print(error_msg)
             return {'status': 'error', 'message': error_msg}
     
-    def predict(self, image_tensor):
+    def predict(self, image_tensor, get_probabilities=False):
         try:
             self.model.eval()
             with torch.no_grad():
                 output = self.model(image_tensor.to(self.device))
-                pred = output.argmax(dim=1, keepdim=True)
-                return pred.item()
+                pred = output.argmax(dim=1, keepdim=True).item()
+                
+                if get_probabilities:
+                    # Apply softmax to get probabilities
+                    probabilities = F.softmax(output, dim=1).squeeze().cpu().numpy()
+                    # Convert to dictionary where keys are digit labels
+                    prob_dict = {str(i): float(prob) for i, prob in enumerate(probabilities)}
+                    return {
+                        'prediction': pred,
+                        'probabilities': prob_dict
+                    }
+                else:
+                    return pred
         except Exception as e:
             print(f"Prediction error: {str(e)}")
             raise

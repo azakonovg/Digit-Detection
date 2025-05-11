@@ -278,6 +278,18 @@
             transform: scale(1.2);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
+        .output-neuron {
+            cursor: pointer;
+        }
+        .neuron-label {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            color: white;
+            font-weight: bold;
+        }
         .neuron-group {
             width: 24px;
             height: 60px;
@@ -553,16 +565,16 @@
                                     <div class="layer-column">
                                         <div class="layer-title">Output Layer</div>
                                         <div class="neurons">
-                                            <div class="neuron"><span class="neuron-label">0</span></div>
-                                            <div class="neuron"><span class="neuron-label">1</span></div>
-                                            <div class="neuron"><span class="neuron-label">2</span></div>
-                                            <div class="neuron"><span class="neuron-label">3</span></div>
-                                            <div class="neuron"><span class="neuron-label">4</span></div>
-                                            <div class="neuron"><span class="neuron-label">5</span></div>
-                                            <div class="neuron"><span class="neuron-label">6</span></div>
-                                            <div class="neuron"><span class="neuron-label">7</span></div>
-                                            <div class="neuron"><span class="neuron-label">8</span></div>
-                                            <div class="neuron"><span class="neuron-label">9</span></div>
+                                            <div class="neuron output-neuron" data-digit="0"><span class="neuron-label">0</span></div>
+                                            <div class="neuron output-neuron" data-digit="1"><span class="neuron-label">1</span></div>
+                                            <div class="neuron output-neuron" data-digit="2"><span class="neuron-label">2</span></div>
+                                            <div class="neuron output-neuron" data-digit="3"><span class="neuron-label">3</span></div>
+                                            <div class="neuron output-neuron" data-digit="4"><span class="neuron-label">4</span></div>
+                                            <div class="neuron output-neuron" data-digit="5"><span class="neuron-label">5</span></div>
+                                            <div class="neuron output-neuron" data-digit="6"><span class="neuron-label">6</span></div>
+                                            <div class="neuron output-neuron" data-digit="7"><span class="neuron-label">7</span></div>
+                                            <div class="neuron output-neuron" data-digit="8"><span class="neuron-label">8</span></div>
+                                            <div class="neuron output-neuron" data-digit="9"><span class="neuron-label">9</span></div>
                                         </div>
                                         <div class="layer-info">
                                             10 output neurons<br>
@@ -813,6 +825,16 @@
                     const resultContainer = document.getElementById('resultContainer');
                     resultContainer.insertBefore(imageCard, resultContainer.firstChild);
                     
+                    // Update neuron colors if probabilities are provided
+                    if (data.probabilities) {
+                        updateNeuronColors(data.probabilities);
+                    } else {
+                        // If no probabilities provided, highlight only the predicted digit
+                        const singlePrediction = {};
+                        singlePrediction[data.prediction] = 1.0;
+                        updateNeuronColors(singlePrediction);
+                    }
+                    
                     clearCanvas();
                 }
             })
@@ -820,6 +842,38 @@
                 console.error('Error:', error);
                 alert('Error submitting drawing. Details: ' + error.message);
             });
+        }
+
+        // Function to update neuron colors based on prediction probabilities
+        function updateNeuronColors(probabilities) {
+            // Reset all neurons to default color
+            const outputNeurons = document.querySelectorAll('.output-neuron');
+            outputNeurons.forEach(neuron => {
+                neuron.style.background = '#3498db';  // Default blue color
+                neuron.style.borderColor = '#2980b9';
+                neuron.style.transform = 'scale(1)';
+            });
+            
+            // Update colors based on probabilities
+            for (const digit in probabilities) {
+                const probability = probabilities[digit];
+                const neuron = document.querySelector(`.output-neuron[data-digit="${digit}"]`);
+                
+                if (neuron) {
+                    // Calculate color - red intensity based on probability
+                    const green = Math.floor(255 * (1 - probability));
+                    const blue = Math.floor(255 * (1 - probability));
+                    neuron.style.background = `rgb(255, ${green}, ${blue})`;
+                    neuron.style.borderColor = '#c0392b';
+                    
+                    // Scale size based on probability (but not too much)
+                    const scale = 1 + (probability * 0.5);
+                    neuron.style.transform = `scale(${scale})`;
+                    
+                    // Add tooltip with exact probability
+                    neuron.title = `Probability: ${(probability * 100).toFixed(2)}%`;
+                }
+            }
         }
 
         function startTraining() {
