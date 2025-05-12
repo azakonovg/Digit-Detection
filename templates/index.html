@@ -502,6 +502,11 @@
             background-color: #e0e0e0;
         }
         
+        .weight-btn:active {
+            transform: scale(0.95);
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+        }
+        
         .weight-btn.increase {
             color: #2ecc71;
         }
@@ -540,6 +545,16 @@
             margin-top: 5px;
             display: flex;
             align-items: center;
+        }
+        
+        /* Animation for updated weights */
+        @keyframes highlight-update {
+            0% { background-color: rgba(52, 152, 219, 0.3); }
+            100% { background-color: transparent; }
+        }
+        
+        .weight-updated {
+            animation: highlight-update 1.5s ease-out;
         }
         
         /* Status message for weight updates */
@@ -1674,6 +1689,21 @@
                     if (weightElement) {
                         weightElement.textContent = data.new_weight.toFixed(4);
                         weightElement.className = data.new_weight >= 0 ? 'weight-value positive-weight' : 'weight-value negative-weight';
+                        
+                        // Find and update the corresponding input field
+                        const row = weightElement.closest('tr');
+                        if (row) {
+                            const inputField = row.querySelector('.weight-input');
+                            if (inputField) {
+                                inputField.value = data.new_weight.toFixed(4);
+                                
+                                // Apply highlight effect
+                                row.classList.remove('weight-updated'); // Remove if already present
+                                // Force browser to recognize the change before adding class again
+                                void row.offsetWidth; 
+                                row.classList.add('weight-updated');
+                            }
+                        }
                     }
                     
                     // Update accuracy display
