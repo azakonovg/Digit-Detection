@@ -620,6 +620,124 @@ class DigitClassifier:
             print(error_msg)
             return {'status': 'error', 'message': error_msg}
     
+    def train_steps(self, steps=10, batch_size=64):
+        """Train the model for a specific number of steps (batches).
+        
+        Args:
+            steps: Number of batches to train for
+            batch_size: Batch size to use
+            
+        Returns:
+            Dictionary with training results
+        """
+        try:
+            # First get the current accuracy for comparison
+            initial_eval = self.evaluate_model()
+            if not initial_eval['success']:
+                return {'success': False, 'error': 'Could not evaluate initial model accuracy'}
+            
+            previous_accuracy = initial_eval['accuracy']
+            
+            # Load MNIST dataset
+            print(f"Loading MNIST dataset for {steps} training steps...")
+            train_dataset = MNIST_Custom(root='./data', train=True, transform=self.transform)
+            
+            # Create data loader
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=0,
+                pin_memory=True if torch.cuda.is_available() else False
+            )
+            
+            # Convert train_loader to iterator to control steps
+            train_iter = iter(train_loader)
+            
+            # Set model to training mode
+            self.model.train()
+            
+            # Initialize metrics
+            running_loss = 0.0
+            correct = 0
+            total = 0
+            
+            # Train for specified number of steps
+            print(f"Running {steps} training steps...")
+            for step in range(steps):
+                try:
+                    # Get next batch, cycling if we reach the end
+                    try:
+                        data, target = next(train_iter)
+                    except StopIteration:
+                        train_iter = iter(train_loader)
+                        data, target = next(train_iter)
+                    
+                    # Move data to device and clear gradients
+                    data = data.to(self.device, non_blocking=True)
+                    target = target.to(self.device, non_blocking=True)
+                    self.optimizer.zero_grad(set_to_none=True)
+                    
+                    # Forward pass
+                    output = self.model(data)
+                    loss = F.nll_loss(output, target)
+                    
+                    # Backward pass
+                    loss.backward()
+                    self.optimizer.step()
+                    
+                    # Calculate accuracy
+                    pred = output.argmax(dim=1, keepdim=True)
+                    batch_correct = pred.eq(target.view_as(pred)).sum().item()
+                    batch_total = target.size(0)
+                    
+                    correct += batch_correct
+                    total += batch_total
+                    running_loss += loss.item()
+                    
+                    # Print progress every few steps
+                    if (step + 1) % 5 == 0 or step == 0 or step == steps - 1:
+                        accuracy = 100. * correct / total
+                        avg_loss = running_loss / (step + 1)
+                        print(f"Step {step+1}/{steps}, Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%")
+                
+                except Exception as e:
+                    print(f"Error in training step {step+1}: {str(e)}")
+                    continue
+            
+            # Save model after training
+            self.save_model()
+            print("Training steps completed, model saved")
+            
+            # Evaluate model after training
+            final_eval = self.evaluate_model()
+            if not final_eval['success']:
+                return {
+                    'success': True,
+                    'previous_accuracy': previous_accuracy,
+                    'new_accuracy': None,
+                    'steps_completed': steps,
+                    'message': 'Training completed but could not evaluate final accuracy'
+                }
+            
+            new_accuracy = final_eval['accuracy']
+            print(f"Accuracy changed from {previous_accuracy:.2f}% to {new_accuracy:.2f}%")
+            
+            return {
+                'success': True,
+                'previous_accuracy': previous_accuracy,
+                'new_accuracy': new_accuracy,
+                'steps_completed': steps,
+                'message': 'Training steps completed successfully'
+            }
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Error during training steps: {str(e)}"
+            print(error_msg)
+            print(traceback.format_exc())
+            return {'success': False, 'error': error_msg}
+
     def predict(self, image_tensor, get_probabilities=False):
         try:
             self.model.eval()

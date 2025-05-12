@@ -12,6 +12,7 @@ from torchvision import transforms
 import json
 from torchvision import datasets
 import matplotlib.pyplot as plt
+import threading
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -223,7 +224,7 @@ def reset_model():
         print(f"Error resetting model: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/get_dataset_info')
+@app.route('/get_dataset_info', methods=['GET'])
 def get_dataset_info():
     try:
         info = classifier.get_dataset_info()
@@ -323,5 +324,61 @@ def update_weight():
         print(traceback.format_exc())  # Print full traceback
         return jsonify({'success': False, 'error': error_msg}), 500
 
+@app.route('/run_training_steps', methods=['POST'])
+def run_training_steps():
+    try:
+        data = request.get_json()
+        steps = data.get('steps', 10)
+        
+        # Validate input
+        try:
+            steps = int(steps)
+            if steps < 1 or steps > 100:
+                return jsonify({'success': False, 'error': 'Steps must be between 1 and 100'}), 400
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid steps value'}), 400
+        
+        # Run the training steps
+        print(f"Running {steps} training steps...")
+        result = classifier.train_steps(steps=steps)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
+    except Exception as e:
+        import traceback
+        error_msg = f"Error during training steps: {str(e)}"
+        print(error_msg)
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/train_model', methods=['POST'])
+def train_model():
+    try:
+        data = request.get_json()
+        epochs = data.get('epochs', 1)
+        batch_size = data.get('batch_size', 64)
+        
+        # Start training in a separate thread
+        def train_thread():
+            try:
+                print(f"Starting training with {epochs} epochs...")
+                for progress in classifier.train_model(epochs=epochs, batch_size=batch_size):
+                    pass  # Progress is already logged in the console
+                print("Training completed")
+            except Exception as e:
+                print(f"Error in training thread: {str(e)}")
+        
+        thread = threading.Thread(target=train_thread)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True, 'message': 'Training started'})
+    except Exception as e:
+        error_msg = f"Error starting training: {str(e)}"
+        print(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5002)

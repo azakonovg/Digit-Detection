@@ -664,6 +664,11 @@
                 <label for="weightLimit">Max weights per layer:</label>
                 <input type="number" id="weightLimit" value="50" min="10" max="1000" step="10">
                 <button class="btn" onclick="loadModelWeights()">Refresh Weights</button>
+                <div style="margin-left: 20px; border-left: 1px solid #ddd; padding-left: 20px; display: flex; align-items: center;">
+                    <label for="trainSteps" style="margin-right: 5px;">Training Steps:</label>
+                    <input type="number" id="trainSteps" value="10" min="1" max="100" style="width: 60px;">
+                    <button class="btn" onclick="runTrainingSteps()" style="margin-left: 5px;">Run Training Steps</button>
+                </div>
                 <div style="margin-left: 20px;">
                     <input type="checkbox" id="editableWeights" onchange="toggleEditableWeights()">
                     <label for="editableWeights">Enable editable weights</label>
@@ -1746,6 +1751,60 @@
             
             // Reload weights table to apply editable state
             loadModelWeights();
+        }
+        
+        function runTrainingSteps() {
+            const steps = document.getElementById('trainSteps').value || 10;
+            const statusElement = document.getElementById('weightStatus');
+            
+            // Show loading status
+            statusElement.className = 'weight-status';
+            statusElement.textContent = `Running ${steps} training steps...`;
+            
+            // Disable buttons during training
+            const trainingBtn = document.querySelector('button[onclick="runTrainingSteps()"]');
+            if (trainingBtn) trainingBtn.disabled = true;
+            
+            // Make API request to run training steps
+            fetch('/run_training_steps', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ steps: parseInt(steps) })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Show success message with accuracy change
+                    statusElement.className = 'weight-status success';
+                    const accuracyDiff = data.new_accuracy - data.previous_accuracy;
+                    const diffPrefix = accuracyDiff >= 0 ? '+' : '';
+                    
+                    statusElement.textContent = `Training complete! Accuracy: ${data.previous_accuracy.toFixed(2)}% → ${data.new_accuracy.toFixed(2)}% (${diffPrefix}${accuracyDiff.toFixed(2)}%)`;
+                    
+                    // Refresh weights and visualization
+                    loadModelWeights();
+                    loadNetworkInfo();
+                } else {
+                    statusElement.className = 'weight-status error';
+                    statusElement.textContent = `Error: ${data.error || 'Unknown error'}`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusElement.className = 'weight-status error';
+                statusElement.textContent = `Error: ${error.message}`;
+            })
+            .finally(() => {
+                // Re-enable buttons
+                if (trainingBtn) trainingBtn.disabled = false;
+            });
         }
         
         // Load weights when the page loads
